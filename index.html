@@ -315,8 +315,8 @@
 
         // Firebase configuration
         const firebaseConfig = {
-            apiKey: "AIzaSyCZZNWGH5c0sPsVPRFOvAA96Fdro0OjLi4",
-            authDomain: "aba-tachon-course.firebaseapp.com",
+            apiKey: process.env.FIREBASE_API_KEY,
+            authDomain: process.env.FIREBASE_AUTH_DOMAIN,
             projectId: "aba-tachon-course",
             storageBucket: "aba-tachon-course.firebasestorage.app",
             messagingSenderId: "584836621111",
