@@ -1,0 +1,8 @@
+{
+  "name": "gptest",
+  "version": "1.0.0",
+  "description": "Business classifier with Netlify Functions",
+  "scripts": {
+    "build": "echo 'Build complete'"
+  }
+}
