@@ -1,7 +1,4 @@
-// ==========================
-// GLOBAL STATE - מצב גלובלי מעודכן
-// ==========================
-
+// Global state
 let appState = {
     rawData: [],
     extractedTransactions: [],
@@ -26,38 +23,12 @@ let appState = {
     },
     showAllBusinesses: false,
     showAllTransactions: false,
-    selectedCategoryDetails: null,
-    
-    // משתנים חדשים
-    loadedFiles: new Set(),
-    fileTransactions: new Map(),
-    monthlyCashflow: {},
-    monthlyIncomes: {},
-    showCashflowTable: false,
-    netWorth: {
-        assets: {
-            investments: 0,
-            checkingAccount: 0,
-            pensionFunds: 0,
-            realEstate: 0,
-            other: 0
-        },
-        liabilities: {
-            mortgage: 0,
-            loans: 0,
-            creditCards: 0,
-            other: 0
-        },
-        history: [],
-        lastUpdated: null
-    },
-    showNetWorthPanel: false
+    selectedCategoryDetails: null
 };
 
-// ==========================
+// ========================= 
 // AUTHENTICATION FUNCTIONS
-// פונקציות זיהוי
-// ==========================
+// =========================
 
 function checkAuthStatus() {
     console.log('🔐 checkAuthStatus: התחלה');
@@ -184,10 +155,9 @@ function signOut() {
     }
 }
 
-// ==========================
+// =========================
 // FIREBASE FUNCTIONS
-// פונקציות Firebase
-// ==========================
+// =========================
 
 async function testFirebaseConnection() {
     console.log('🔍 testFirebaseConnection: התחלה');
@@ -422,1420 +392,216 @@ function initializeFallbackData() {
     showSuccessNotification();
 }
 
-// ==========================
-// ADVANCED BANK FILE PROCESSOR
-// מעבד קבצי בנק מתקדם
-// ==========================
-
-// פונקציה מתקדמת להחלפת handleFileUpload הקיימת
-async function handleFileUploadWithDuplicateCheck(event) {
-    const files = Array.from(event.target.files);
-    if (files.length === 0) return;
-    
-    console.log('🚀 Advanced File Upload - התחלת עיבוד עם בדיקת כפילויות');
-    
-    let allTransactions = [];
-    let filesProcessed = 0;
-    let duplicateFiles = [];
-    let errorFiles = [];
-    
-    for (const file of files) {
-        try {
-            console.log(`📁 מעבד קובץ: ${file.name}`);
-            
-            // שלב 1: קריאת קובץ מתקדמת
-            const fileData = await readFileAdvanced(file);
-            
-            if (!fileData || fileData.length === 0) {
-                console.log(`⚠️ קובץ ריק: ${file.name}`);
-                errorFiles.push({name: file.name, error: 'קובץ ריק או לא נתמך'});
-                continue;
-            }
-            
-            // שלב 2: ניקוי נתונים
-            const cleanedData = cleanBankData(fileData, file.name);
-            
-            if (!cleanedData || cleanedData.length === 0) {
-                console.log(`⚠️ אין נתונים תקינים: ${file.name}`);
-                errorFiles.push({name: file.name, error: 'לא נמצאו נתונים תקינים'});
-                continue;
-            }
-            
-            // שלב 3: עיבוד עסקאות
-            const transactions = await processBankTransactions(cleanedData, file.name);
-            
-            if (!transactions || transactions.length === 0) {
-                console.log(`⚠️ אין עסקאות: ${file.name}`);
-                errorFiles.push({name: file.name, error: 'לא נמצאו עסקאות תקינות'});
-                continue;
-            }
-            
-            // שלב 4: בדיקת כפילויות משופרת
-            const isDuplicate = checkForDuplicateFileAdvanced(transactions, file.name);
-            
-            if (isDuplicate) {
-                duplicateFiles.push(file.name);
-                console.log(`🔄 קובץ כפול: ${file.name}`);
-                continue;
-            }
-            
-            // שלב 5: רישום ושמירה
-            registerLoadedFile(file.name, transactions);
-            allTransactions = [...allTransactions, ...transactions];
-            filesProcessed++;
-            
-            console.log(`✅ קובץ עובד: ${file.name} - ${transactions.length} עסקאות`);
-            
-        } catch (error) {
-            console.error(`❌ שגיאה בקובץ ${file.name}:`, error);
-            errorFiles.push({name: file.name, error: error.message});
-        }
-    }
-    
-    // דיווח מפורט על התוצאות
-    showUploadResults(filesProcessed, duplicateFiles, errorFiles, allTransactions.length);
-    
-    // אם יש עסקאות חדשות
-    if (filesProcessed > 0 && allTransactions.length > 0) {
-        // מיזוג עם נתונים קיימים
-        appState.rawData = [...(appState.rawData || []), ...allTransactions];
-        appState.extractedTransactions = [...(appState.extractedTransactions || []), ...allTransactions];
-        appState.uploadedFiles = [...appState.uploadedFiles, ...files.map(f => f.name).filter(name => !duplicateFiles.includes(name) && !errorFiles.some(ef => ef.name === name))];
-        
-        hideFileUpload();
-        
-        setTimeout(() => {
-            analyzeFileDataAdvanced(allTransactions);
-        }, 500);
-    } else if (allTransactions.length === 0) {
-        // אם לא נוספו עסקאות כלל, נשאיר את מסך ההעלאה
-        console.log('🔄 לא נוספו עסקאות חדשות');
-    }
-}
-
-// פונקציה לקריאת קבצים מסוגים שונים
-async function readFileAdvanced(file) {
-    const fileName = file.name.toLowerCase();
-    
-    console.log(`📖 קורא קובץ: ${fileName}`);
-    
+async function autoSaveToFirebase() {
     try {
-        if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
-            // Excel files
-            return await readExcelFile(file);
-            
-        } else if (fileName.endsWith('.csv')) {
-            // CSV files
-            return await readCSVFile(file);
-            
-        } else if (fileName.endsWith('.tsv') || fileName.endsWith('.txt')) {
-            // TSV files
-            return await readTSVFile(file);
-            
-        } else {
-            // נסה לזהות אוטומטית לפי תוכן
-            return await readFileByContent(file);
+        if (!appState.currentUser || appState.categorizedData.length === 0) {
+            return;
         }
+
+        console.log('💾 Auto-saving to Firebase...');
+        
+        const userAnalysisRef = window.doc(window.firebaseDb, 'userAnalysis', appState.currentUser.uid);
+        
+        const analysisData = {
+            userId: appState.currentUser.uid,
+            userEmail: appState.currentUser.email,
+            lastUpdated: new Date().toISOString(),
+            transactions: appState.categorizedData.map(transaction => ({
+                id: transaction.id,
+                date: transaction.date,
+                description: transaction.description,
+                amount: transaction.amount,
+                category: transaction.category,
+                classification: getTransactionClassification(transaction),
+                isYearly: appState.yearlyExpenses.has(transaction.id),
+                isDeleted: appState.deletedTransactions.has(transaction.id)
+            })),
+            businessMappings: appState.businessMappings,
+            manualClassifications: appState.manualClassifications,
+            minAmountFilter: appState.minAmountFilter
+        };
+
+        await window.setDoc(userAnalysisRef, analysisData);
+        
+        // Save new businesses to the shared database
+        await saveNewBusinessesToDatabase();
+        
+        console.log('✅ Auto-save completed successfully');
         
     } catch (error) {
-        console.error(`❌ שגיאה בקריאת קובץ ${fileName}:`, error);
-        throw new Error(`לא ניתן לקרוא את הקובץ ${fileName}`);
+        console.error('❌ Auto-save failed:', error);
     }
 }
 
-// קריאת קובץ Excel
-async function readExcelFile(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        
-        reader.onload = function(e) {
-            try {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, { type: 'array' });
-                
-                // מחפש את השיט הראשון שלא ריק
-                const sheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[sheetName];
-                
-                // המרה ל-JSON
-                const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
-                    header: 1,
-                    defval: '',
-                    blankrows: false
-                });
-                
-                console.log(`📊 Excel נקרא: ${jsonData.length} שורות`);
-                resolve(jsonData);
-                
-            } catch (error) {
-                reject(new Error('קובץ Excel פגום או לא נתמך'));
-            }
-        };
-        
-        reader.onerror = () => reject(new Error('שגיאה בקריאת קובץ Excel'));
-        reader.readAsArrayBuffer(file);
-    });
-}
-
-// קריאת קובץ CSV
-async function readCSVFile(file) {
-    return new Promise((resolve, reject) => {
-        Papa.parse(file, {
-            header: false,
-            skipEmptyLines: true,
-            encoding: 'UTF-8',
-            complete: (results) => {
-                if (results.errors.length > 0) {
-                    console.warn('CSV warnings:', results.errors);
-                }
-                console.log(`📊 CSV נקרא: ${results.data.length} שורות`);
-                resolve(results.data);
-            },
-            error: (error) => {
-                reject(new Error('קובץ CSV פגום או לא נתמך'));
-            }
-        });
-    });
-}
-
-// קריאת קובץ TSV
-async function readTSVFile(file) {
-    return new Promise((resolve, reject) => {
-        Papa.parse(file, {
-            header: false,
-            skipEmptyLines: true,
-            delimiter: '\t',
-            encoding: 'UTF-8',
-            complete: (results) => {
-                console.log(`📊 TSV נקרא: ${results.data.length} שורות`);
-                resolve(results.data);
-            },
-            error: (error) => {
-                reject(new Error('קובץ TSV פגום או לא נתמך'));
-            }
-        });
-    });
-}
-
-// זיהוי סוג קובץ לפי תוכן
-async function readFileByContent(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        
-        reader.onload = function(e) {
-            const content = e.target.result;
-            
-            // בדיקת מפרידים
-            if (content.includes('\t')) {
-                // כנראה TSV
-                console.log('🔍 זוהה כ-TSV לפי תוכן');
-                Papa.parse(content, {
-                    header: false,
-                    skipEmptyLines: true,
-                    delimiter: '\t',
-                    complete: (results) => resolve(results.data),
-                    error: (error) => reject(error)
-                });
-            } else if (content.includes('|')) {
-                // כנראה Pipe-separated
-                console.log('🔍 זוהה כ-Pipe-separated לפי תוכן');
-                Papa.parse(content, {
-                    header: false,
-                    skipEmptyLines: true,
-                    delimiter: '|',
-                    complete: (results) => resolve(results.data),
-                    error: (error) => reject(error)
-                });
-            } else {
-                // נסה CSV רגיל
-                console.log('🔍 מנסה CSV רגיל');
-                Papa.parse(content, {
-                    header: false,
-                    skipEmptyLines: true,
-                    complete: (results) => resolve(results.data),
-                    error: (error) => reject(error)
-                });
-            }
-        };
-        
-        reader.onerror = () => reject(new Error('שגיאה בקריאת הקובץ'));
-        reader.readAsText(file, 'UTF-8');
-    });
-}
-
-// ניקוי וסינון נתוני בנק
-function cleanBankData(rawData, fileName) {
-    console.log(`🧹 מנקה נתונים מקובץ: ${fileName}`);
-    
-    if (!rawData || rawData.length === 0) {
-        return [];
-    }
-    
-    // המרה לפורמט אחיד (array של arrays)
-    let cleanData = rawData;
-    
-    // אם זה JSON מExcel, נמיר לarray של arrays
-    if (rawData[0] && typeof rawData[0] === 'object' && !Array.isArray(rawData[0])) {
-        cleanData = rawData.map(row => Object.values(row));
-    }
-    
-    // סינון שורות ריקות
-    cleanData = cleanData.filter(row => {
-        if (!Array.isArray(row)) return false;
-        const nonEmptyValues = row.filter(cell => 
-            cell !== null && 
-            cell !== undefined && 
-            cell.toString().trim() !== ''
-        );
-        return nonEmptyValues.length > 0;
-    });
-    
-    // חיפוש תחילת הטבלה האמיתית
-    const tableStart = findTableStart(cleanData);
-    if (tableStart > 0) {
-        console.log(`📍 נמצאה תחילת טבלה בשורה ${tableStart + 1}`);
-        cleanData = cleanData.slice(tableStart);
-    }
-    
-    // חיפוש סוף הטבלה
-    const tableEnd = findTableEnd(cleanData);
-    if (tableEnd > 0 && tableEnd < cleanData.length - 1) {
-        console.log(`📍 נמצא סוף טבלה בשורה ${tableEnd + 1}`);
-        cleanData = cleanData.slice(0, tableEnd + 1);
-    }
-    
-    console.log(`✅ נתונים נוקו: ${cleanData.length} שורות נותרו`);
-    return cleanData;
-}
-
-// חיפוש תחילת טבלת נתונים
-function findTableStart(data) {
-    for (let i = 0; i < Math.min(data.length, 20); i++) {
-        const row = data[i];
-        if (!Array.isArray(row) || row.length < 3) continue;
-        
-        // חיפוש כותרות נפוצות
-        const rowText = row.join(' ').toLowerCase();
-        
-        if (rowText.includes('תאריך') || 
-            rowText.includes('date') ||
-            rowText.includes('סכום') ||
-            rowText.includes('amount') ||
-            rowText.includes('תיאור') ||
-            rowText.includes('description') ||
-            rowText.includes('פירוט') ||
-            rowText.includes('עסק') ||
-            rowText.includes('business')) {
-            return i;
-        }
-        
-        // אם יש 3+ עמודות עם ערכים שנראים כמו נתונים
-        let dateCount = 0;
-        let numberCount = 0;
-        let textCount = 0;
-        
-        for (const cell of row) {
-            if (!cell) continue;
-            const cellStr = cell.toString().trim();
-            
-            if (isDateLike(cellStr)) dateCount++;
-            else if (isNumberLike(cellStr)) numberCount++;
-            else if (cellStr.length > 2) textCount++;
-        }
-        
-        if (dateCount >= 1 && numberCount >= 1 && textCount >= 1) {
-            return i;
-        }
-    }
-    
-    return 0;
-}
-
-// חיפוש סוף טבלת נתונים
-function findTableEnd(data) {
-    for (let i = data.length - 1; i >= Math.max(0, data.length - 10); i--) {
-        const row = data[i];
-        if (!Array.isArray(row)) continue;
-        
-        const rowText = row.join(' ').toLowerCase();
-        
-        // מילות מפתח לסוף טבלה
-        if (rowText.includes('סה"כ') ||
-            rowText.includes('סך הכל') ||
-            rowText.includes('total') ||
-            rowText.includes('סיכום') ||
-            rowText.includes('יתרה') ||
-            rowText.includes('balance') ||
-            rowText.includes('---') ||
-            rowText.includes('===')) {
-            return i - 1;
-        }
-    }
-    
-    return data.length - 1;
-}
-
-// בדיקה אם טקסט נראה כמו תאריך
-function isDateLike(text) {
-    if (!text || typeof text !== 'string') return false;
-    
-    // פורמטים נפוצים של תאריכים
-    const datePatterns = [
-        /^\d{1,2}\/\d{1,2}\/\d{2,4}$/,     // 01/12/2024
-        /^\d{1,2}-\d{1,2}-\d{2,4}$/,      // 01-12-2024
-        /^\d{1,2}\.\d{1,2}\.\d{2,4}$/,    // 01.12.2024
-        /^\d{4}-\d{1,2}-\d{1,2}$/,        // 2024-12-01
-        /^\d{8}$/                         // 20241201
-    ];
-    
-    return datePatterns.some(pattern => pattern.test(text.trim()));
-}
-
-// בדיקה אם טקסט נראה כמו מספר/סכום
-function isNumberLike(text) {
-    if (!text) return false;
-    
-    const cleanText = text.toString().replace(/[,\s₪]/g, '');
-    
-    // מספר עם אפשרות למינוס ונקודה עשרונית
-    return /^-?\d+\.?\d*$/.test(cleanText) && cleanText.length > 0;
-}
-
-// עיבוד עסקאות בנק מתקדם
-async function processBankTransactions(cleanData, fileName) {
-    console.log(`💳 מעבד עסקאות בנק מקובץ: ${fileName}`);
-    
-    if (!cleanData || cleanData.length < 2) {
-        console.log('❌ אין מספיק נתונים לעיבוד');
-        return [];
-    }
-    
-    // זיהוי עמודות
-    const columnMapping = detectBankColumns(cleanData);
-    
-    if (!columnMapping.amount || !columnMapping.description) {
-        console.log('❌ לא נמצאו עמודות חיוניות');
-        throw new Error('לא נמצאו עמודות סכום ותיאור בקובץ');
-    }
-    
-    console.log('📊 מיפוי עמודות:', columnMapping);
-    
-    // זיהוי סוג חשבון (עו"ש או אשראי)
-    const accountType = detectAccountType(cleanData, columnMapping, fileName);
-    console.log(`🏦 סוג חשבון זוהה: ${accountType}`);
-    
-    // עיבוד השורות
-    const transactions = [];
-    const headerRow = Math.max(0, columnMapping.headerRow || 0);
-    
-    for (let i = headerRow + 1; i < cleanData.length; i++) {
-        const row = cleanData[i];
-        
-        if (!Array.isArray(row) || row.length <= Math.max(columnMapping.amount, columnMapping.description)) {
-            continue;
-        }
-        
-        try {
-            const transaction = processTransactionRow(row, columnMapping, accountType, i, fileName);
-            
-            if (transaction && transaction.amount > 0) {
-                transactions.push(transaction);
-            }
-            
-        } catch (error) {
-            console.warn(`⚠️ שגיאה בעיבוד שורה ${i + 1}:`, error.message);
-        }
-    }
-    
-    console.log(`✅ עובדו ${transactions.length} עסקאות מתוך ${cleanData.length - headerRow - 1} שורות`);
-    return transactions;
-}
-
-// זיהוי עמודות בקובץ בנק
-function detectBankColumns(data) {
-    const columnMapping = {
-        date: null,
-        description: null,
-        amount: null,
-        headerRow: 0
-    };
-    
-    // חיפוש שורת כותרת
-    for (let rowIndex = 0; rowIndex < Math.min(data.length, 5); rowIndex++) {
-        const row = data[rowIndex];
-        if (!Array.isArray(row)) continue;
-        
-        const foundColumns = analyzeHeaderRow(row);
-        
-        if (foundColumns.description !== null && foundColumns.amount !== null) {
-            columnMapping.date = foundColumns.date;
-            columnMapping.description = foundColumns.description;
-            columnMapping.amount = foundColumns.amount;
-            columnMapping.headerRow = rowIndex;
-            break;
-        }
-    }
-    
-    // אם לא נמצאו כותרות, נסה זיהוי לפי תוכן
-    if (columnMapping.amount === null || columnMapping.description === null) {
-        const contentMapping = analyzeDataRows(data);
-        if (contentMapping.amount !== null && contentMapping.description !== null) {
-            Object.assign(columnMapping, contentMapping);
-        }
-    }
-    
-    return columnMapping;
-}
-
-// ניתוח שורת כותרת
-function analyzeHeaderRow(row) {
-    const mapping = { date: null, description: null, amount: null };
-    
-    for (let i = 0; i < row.length; i++) {
-        const header = row[i]?.toString().toLowerCase().trim() || '';
-        
-        // עמודת תאריך
-        if ((header.includes('תאריך') || header.includes('date')) && mapping.date === null) {
-            mapping.date = i;
-        }
-        
-        // עמודת תיאור
-        else if ((header.includes('תיאור') || header.includes('פירוט') || 
-                  header.includes('בית עסק') || header.includes('עסק') ||
-                  header.includes('description') || header.includes('business') ||
-                  header.includes('merchant') || header.includes('payee')) && mapping.description === null) {
-            mapping.description = i;
-        }
-        
-        // עמודת סכום
-        else if ((header.includes('סכום') || header.includes('amount') || 
-                  header.includes('חיוב') || header.includes('debit') ||
-                  header.includes('credit') || header.includes('קנייה') ||
-                  header.includes('ש"ח') || header.includes('שח')) && mapping.amount === null) {
-            mapping.amount = i;
-        }
-    }
-    
-    return mapping;
-}
-
-// ניתוח שורות נתונים לזיהוי עמודות
-function analyzeDataRows(data) {
-    const mapping = { date: null, description: null, amount: null };
-    
-    // נתחיל מהשורה השנייה (אחרי כותרת אפשרית)
-    const sampleRows = data.slice(1, Math.min(data.length, 6));
-    
-    for (let colIndex = 0; colIndex < Math.max(...sampleRows.map(r => r.length)); colIndex++) {
-        let dateCount = 0;
-        let numberCount = 0;
-        let textCount = 0;
-        let textLengthSum = 0;
-        
-        for (const row of sampleRows) {
-            if (!row[colIndex]) continue;
-            
-            const cellValue = row[colIndex].toString().trim();
-            
-            if (isDateLike(cellValue)) {
-                dateCount++;
-            } else if (isNumberLike(cellValue)) {
-                numberCount++;
-            } else if (cellValue.length > 2) {
-                textCount++;
-                textLengthSum += cellValue.length;
-            }
-        }
-        
-        const sampleSize = sampleRows.length;
-        
-        // זיהוי עמודת תאריך
-        if (dateCount >= sampleSize * 0.7 && mapping.date === null) {
-            mapping.date = colIndex;
-        }
-        
-        // זיהוי עמודת סכום
-        else if (numberCount >= sampleSize * 0.7 && mapping.amount === null) {
-            mapping.amount = colIndex;
-        }
-        
-        // זיהוי עמודת תיאור
-        else if (textCount >= sampleSize * 0.7 && textLengthSum / textCount > 5 && mapping.description === null) {
-            mapping.description = colIndex;
-        }
-    }
-    
-    return mapping;
-}
-
-// זיהוי סוג חשבון (עו"ש או אשראי)
-function detectAccountType(data, columnMapping, fileName) {
-    // בדיקה לפי שם הקובץ
-    const lowerFileName = fileName.toLowerCase();
-    
-    if (lowerFileName.includes('אשראי') || lowerFileName.includes('credit') || lowerFileName.includes('visa') || lowerFileName.includes('mastercard')) {
-        return 'אשראי';
-    }
-    
-    if (lowerFileName.includes('עו"ש') || lowerFileName.includes('עוש') || lowerFileName.includes('checking') || lowerFileName.includes('current')) {
-        return 'עו"ש';
-    }
-    
-    // בדיקה לפי תוכן הנתונים
-    const sampleRows = data.slice(Math.max(0, columnMapping.headerRow + 1), Math.min(data.length, columnMapping.headerRow + 11));
-    let negativeCount = 0;
-    let positiveCount = 0;
-    
-    for (const row of sampleRows) {
-        if (!row[columnMapping.amount]) continue;
-        
-        const amount = parseAmount(row[columnMapping.amount]);
-        if (amount > 0) positiveCount++;
-        else if (amount < 0) negativeCount++;
-    }
-    
-    // אם רוב הסכומים חיוביים - כנראה אשראי
-    if (positiveCount > negativeCount * 2) {
-        return 'אשראי';
-    }
-    
-    // אחרת כנראה עו"ש
-    return 'עו"ש';
-}
-
-// עיבוד שורת עסקה בודדת
-function processTransactionRow(row, columnMapping, accountType, rowIndex, fileName) {
-    const dateValue = row[columnMapping.date] || '';
-    const descValue = row[columnMapping.description] || '';
-    const amountValue = row[columnMapping.amount] || '';
-    
-    // בדיקות בסיסיות
-    if (!descValue || !amountValue) {
-        return null;
-    }
-    
-    const description = descValue.toString().trim();
-    const rawAmount = parseAmount(amountValue);
-    
-    if (description.length < 2 || rawAmount === 0) {
-        return null;
-    }
-    
-    // סינון לפי סוג חשבון
-    let finalAmount = 0;
-    
-    if (accountType === 'עו"ש') {
-        // בעו"ש: רק הוצאות (סכומים שליליים)
-        if (rawAmount >= 0) {
-            return null; // דילוג על הכנסות
-        }
-        
-        // בדיקה אם זה העברה פנימית
-        if (isInternalTransfer(description)) {
-            return null;
-        }
-        
-        finalAmount = Math.abs(rawAmount); // המרה לחיובי
-        
-    } else {
-        // באשראי: כל הסכומים הם הוצאות
-        finalAmount = Math.abs(rawAmount);
-    }
-    
-    // יצירת העסקה
-    return {
-        id: `tx_${fileName}_${rowIndex}_${Date.now()}`,
-        date: formatDate(dateValue),
-        description: description,
-        amount: Math.floor(finalAmount),
-        originalRow: rowIndex,
-        category: 'לא מסווג',
-        accountType: accountType,
-        fileName: fileName,
-        rawData: row
-    };
-}
-
-// פרסור סכום מטקסט
-function parseAmount(amountText) {
-    if (!amountText) return 0;
-    
-    const cleanAmount = amountText.toString()
-        .replace(/[,\s₪]/g, '')
-        .replace(/[^\d.-]/g, '')
-        .trim();
-    
-    if (!/^-?\d+\.?\d*$/.test(cleanAmount)) {
-        return 0;
-    }
-    
-    return parseFloat(cleanAmount) || 0;
-}
-
-// זיהוי העברות פנימיות
-function isInternalTransfer(description) {
-    const desc = description.toLowerCase();
-    
-    const internalKeywords = [
-        'העברה',
-        'זיכוי פנימי',
-        'העברה פנימית',
-        'transfer',
-        'internal',
-        'העברת כספים',
-        'זיכוי חשבון'
-    ];
-    
-    return internalKeywords.some(keyword => desc.includes(keyword));
-}
-
-// פורמט תאריך
-function formatDate(dateValue) {
-    if (!dateValue) return '';
-    
-    const dateStr = dateValue.toString().trim();
-    
-    // אם זה כבר תאריך מפורמט טוב
-    if (dateStr.includes('/') || dateStr.includes('-') || dateStr.includes('.')) {
-        return dateStr;
-    }
-    
-    // אם זה מספר (Excel date serial)
-    if (/^\d+$/.test(dateStr)) {
-        try {
-            const excelDate = new Date((parseInt(dateStr) - 25569) * 86400 * 1000);
-            return excelDate.toLocaleDateString('he-IL');
-        } catch {
-            return dateStr;
-        }
-    }
-    
-    return dateStr;
-}
-
-// הצגת תוצאות העלאה מפורטות
-function showUploadResults(filesProcessed, duplicateFiles, errorFiles, transactionsCount) {
-    let message = '📊 תוצאות העלאת קבצים:\n\n';
-    
-    if (filesProcessed > 0) {
-        message += `✅ עובדו בהצלחה: ${filesProcessed} קבצים (${transactionsCount} עסקאות)\n\n`;
-    }
-    
-    if (duplicateFiles.length > 0) {
-        message += `🔄 קבצים כפולים (לא עובדו):\n`;
-        duplicateFiles.forEach(fileName => {
-            message += `   • ${fileName}\n`;
-        });
-        message += '\n';
-    }
-    
-    if (errorFiles.length > 0) {
-        message += `❌ קבצים עם שגיאות:\n`;
-        errorFiles.forEach(({name, error}) => {
-            message += `   • ${name}: ${error}\n`;
-        });
-        message += '\n';
-    }
-    
-    if (filesProcessed === 0 && duplicateFiles.length === 0 && errorFiles.length === 0) {
-        message += 'לא נמצאו קבצים לעיבוד.';
-    }
-    
-    console.log('📊 תוצאות העלאה:', message);
-    alert(message);
-}
-
-// ==========================
-// DUPLICATE PREVENTION & DATA MANAGEMENT
-// מניעת כפילויות וניהול נתונים
-// ==========================
-
-// פונקציה משופרת לבדיקת כפילויות קובץ
-function checkForDuplicateFileAdvanced(newTransactions, fileName) {
-    console.log(`🔍 בודק כפילויות עבור קובץ: ${fileName}`);
-    
-    // בדיקה אם הקובץ כבר נטען לפי שם
-    if (appState.loadedFiles.has(fileName)) {
-        console.log(`📂 קובץ ${fileName} כבר נטען קודם לפי שם`);
-        return true;
-    }
-    
-    // בדיקה אם יש 3+ עסקאות זהות
-    if (!appState.extractedTransactions || appState.extractedTransactions.length === 0) {
-        return false;
-    }
-    
-    let exactMatches = 0;
-    const sampleSize = Math.min(newTransactions.length, 10);
-    
-    for (let i = 0; i < sampleSize; i++) {
-        const newTx = newTransactions[i];
-        
-        const exists = appState.extractedTransactions.some(existingTx => {
-            return isSameTransaction(newTx, existingTx);
-        });
-        
-        if (exists) {
-            exactMatches++;
-            console.log(`🔍 מצאתי עסקה זהה: ${newTx.description} - ${newTx.amount}₪`);
-            
-            if (exactMatches >= 3) {
-                console.log(`❌ נמצאו ${exactMatches} עסקאות זהות - קובץ כפול!`);
-                return true;
-            }
-        }
-    }
-    
-    console.log(`✅ לא נמצאו כפילויות משמעותיות (${exactMatches} מתוך ${sampleSize})`);
-    return false;
-}
-
-// בדיקה אם שתי עסקאות זהות
-function isSameTransaction(tx1, tx2) {
-    return tx1.date === tx2.date &&
-           tx1.description.trim().toLowerCase() === tx2.description.trim().toLowerCase() &&
-           Math.abs(tx1.amount - tx2.amount) < 1; // סובלנות של 1 שקל להבדלי עיגול
-}
-
-// רישום קובץ כטעון
-function registerLoadedFile(fileName, transactions) {
-    console.log(`📝 רושם קובץ כטעון: ${fileName} עם ${transactions.length} עסקאות`);
-    
-    appState.loadedFiles.add(fileName);
-    
-    // שמירת מיפוי קובץ לעסקאות
-    const transactionIds = transactions.map(tx => tx.id);
-    appState.fileTransactions.set(fileName, transactionIds);
-    
-    // עדכון מטא-דטה של העסקאות
-    transactions.forEach(tx => {
-        tx.sourceFile = fileName;
-        tx.loadedAt = new Date().toISOString();
-    });
-}
-
-// הצגת מידע על קבצים טעונים
-function getLoadedFilesInfo() {
-    const filesInfo = Array.from(appState.loadedFiles).map(fileName => {
-        const transactionIds = appState.fileTransactions.get(fileName) || [];
-        const transactionCount = transactionIds.length;
-        
-        return {
-            fileName,
-            transactionCount,
-            loadedAt: getFileLoadTime(fileName)
-        };
-    });
-    
-    return filesInfo;
-}
-
-// קבלת זמן טעינת קובץ
-function getFileLoadTime(fileName) {
-    const transactions = appState.extractedTransactions.filter(tx => tx.sourceFile === fileName);
-    if (transactions.length > 0) {
-        return transactions[0].loadedAt || 'לא ידוע';
-    }
-    return 'לא ידוע';
-}
-
-// מחיקת כל העסקאות שנטענו מקבצים (לא מחיקת מיפויים)
-function clearLoadedTransactions() {
-    console.log('🗑️ מוחק את כל העסקאות שנטענו מקבצים...');
-    
-    const confirmMessage = `האם אתה בטוח שברצונך למחוק את כל העסקאות שנטענו מקבצים?
-
-⚠️ פעולה זו תמחק:
-• ${appState.extractedTransactions?.length || 0} עסקאות
-• ${appState.loadedFiles.size} קבצים רשומים
-
-✅ פעולה זו לא תמחק:
-• מיפויי עסקים וקטגוריות
-• הגדרות המערכת
-• נתוני המילון החכם
-
-האם להמשיך?`;
-
-    if (!confirm(confirmMessage)) {
-        return;
-    }
-    
+async function saveNewBusinessesToDatabase() {
     try {
-        // שמירת מיפויים חשובים לפני מחיקה
-        const businessMappingsBackup = {...appState.businessMappings};
-        const manualClassificationsBackup = {...appState.manualClassifications};
-        const loadedKeywordsBackup = {...appState.loadedKeywords};
-        const loadedBusinessDatabaseBackup = {...appState.loadedBusinessDatabase};
-        const monthlyIncomesBackup = {...appState.monthlyIncomes};
-        const netWorthBackup = {...appState.netWorth};
+        if (Object.keys(appState.newBusinessesToSave).length === 0) {
+            return;
+        }
+
+        console.log('💾 Saving new businesses to database:', appState.newBusinessesToSave);
         
-        // מחיקת נתוני עסקאות
-        appState.rawData = [];
-        appState.extractedTransactions = [];
-        appState.categorizedData = [];
-        appState.deletedTransactions = new Set();
-        appState.yearlyExpenses = new Set();
-        appState.loadedFiles = new Set();
-        appState.fileTransactions = new Map();
-        appState.uploadedFiles = [];
+        for (const [businessName, category] of Object.entries(appState.newBusinessesToSave)) {
+            await window.addDoc(window.collection(window.firebaseDb, 'businessdatabase'), {
+                'שם עסק': businessName,
+                'קטגוריה': category,
+                'נוסף על ידי': appState.currentUser.email,
+                'תאריך הוספה': new Date().toISOString()
+            });
+        }
         
-        // שחזור מיפויים
-        appState.businessMappings = businessMappingsBackup;
-        appState.manualClassifications = manualClassificationsBackup;
-        appState.loadedKeywords = loadedKeywordsBackup;
-        appState.loadedBusinessDatabase = loadedBusinessDatabaseBackup;
-        appState.monthlyIncomes = monthlyIncomesBackup;
-        appState.netWorth = netWorthBackup;
+        // Add to local database
+        Object.entries(appState.newBusinessesToSave).forEach(([business, category]) => {
+            appState.loadedBusinessDatabase[business.toLowerCase()] = category;
+        });
+        
+        // Clear the new businesses queue
         appState.newBusinessesToSave = {};
-        
-        // איפוס מינימום סכום
-        appState.minAmountFilter = 0;
-        document.getElementById('minAmountFilter').value = '0';
-        
-        // איפוס תצוגה
-        appState.showAllBusinesses = false;
-        appState.showAllTransactions = false;
-        appState.showTransactions = false;
-        appState.selectedCategoryDetails = null;
-        appState.showCashflowTable = false;
-        appState.showNetWorthPanel = false;
-        
-        // הרס גרף אם קיים
-        if (appState.chartInstance) {
-            appState.chartInstance.destroy();
-            appState.chartInstance = null;
-        }
-        
-        // הסתרת כל הקונטיינרים
-        hideAllContainers();
-        showFileUpload();
-        
-        // הודעת הצלחה
-        alert('✅ כל העסקאות נמחקו בהצלחה!\n\nמיפויי עסקים וקטגוריות נשמרו.');
-        
-        // עדכון סטטיסטיקות
         updateStatsDisplay();
         
-        console.log('✅ מחיקת נתונים הושלמה בהצלחה');
+        console.log('✅ New businesses saved successfully');
         
     } catch (error) {
-        console.error('❌ שגיאה במחיקת נתונים:', error);
-        alert('❌ שגיאה במחיקת נתונים: ' + error.message);
+        console.error('❌ Failed to save new businesses:', error);
     }
 }
 
-// מחיקת קובץ ספציפי
-function clearSpecificFile(fileName) {
-    console.log(`🗑️ מוחק קובץ ספציפי: ${fileName}`);
-    
-    if (!confirm(`האם אתה בטוח שברצונך למחוק את הקובץ "${fileName}" ואת כל העסקאות שלו?`)) {
-        return;
-    }
-    
+async function loadUserAnalysis() {
     try {
-        // מציאת העסקאות מהקובץ הספציפי
-        const transactionsToRemove = appState.extractedTransactions.filter(tx => tx.sourceFile === fileName);
-        const transactionIdsToRemove = new Set(transactionsToRemove.map(tx => tx.id));
+        if (!appState.currentUser) return;
+
+        const userAnalysisDoc = await window.getDoc(window.doc(window.firebaseDb, 'userAnalysis', appState.currentUser.uid));
         
-        console.log(`🔍 נמצאו ${transactionsToRemove.length} עסקאות למחיקה מקובץ ${fileName}`);
+        if (userAnalysisDoc.exists()) {
+            const data = userAnalysisDoc.data();
+            
+            if (data.transactions && data.transactions.length > 0) {
+                appState.categorizedData = data.transactions.map(t => ({
+                    id: t.id,
+                    date: t.date,
+                    description: t.description,
+                    amount: t.amount,
+                    category: t.category,
+                    classification: t.classification,
+                    originalRow: 0
+                }));
+
+                appState.extractedTransactions = [...appState.categorizedData];
+                appState.businessMappings = data.businessMappings || {};
+                appState.manualClassifications = data.manualClassifications || {};
+                appState.minAmountFilter = data.minAmountFilter || 0;
+                
+                appState.yearlyExpenses = new Set();
+                appState.deletedTransactions = new Set();
+                
+                data.transactions.forEach(t => {
+                    if (t.isYearly) appState.yearlyExpenses.add(t.id);
+                    if (t.isDeleted) appState.deletedTransactions.add(t.id);
+                });
+
+                document.getElementById('minAmountFilter').value = appState.minAmountFilter;
+                
+                hideFileUpload();
+                updateDisplay();
+                
+                console.log('✅ נתוני משתמש נטענו מבסיס הנתונים');
+            }
+        }
+    } catch (error) {
+        console.error('❌ שגיאה בטעינת נתוני משתמש:', error);
+    }
+}
+
+// =========================
+// CLAUDE API INTEGRATION
+// =========================
+
+// פונקציה לקריאה ל-Claude API דרך Netlify Function
+async function classifyWithClaude(businessList) {
+    try {
+        console.log('🤖 Sending to Claude API:', businessList);
         
-        // מחיקה מכל המקומות
-        appState.extractedTransactions = appState.extractedTransactions.filter(tx => tx.sourceFile !== fileName);
-        appState.categorizedData = appState.categorizedData.filter(tx => !transactionIdsToRemove.has(tx.id));
-        
-        // ניקוי סטטוסים
-        transactionIdsToRemove.forEach(id => {
-            appState.deletedTransactions.delete(id);
-            appState.yearlyExpenses.delete(id);
-            delete appState.manualClassifications[id];
+        const response = await fetch('/.netlify/functions/classify-business', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                businessList: businessList.join(', ')
+            })
         });
         
-        // מחיקה מרישומי קבצים
-        appState.loadedFiles.delete(fileName);
-        appState.fileTransactions.delete(fileName);
-        
-        // עדכון תצוגה
-        updateDisplay();
-        updateStatsDisplay();
-        
-        alert(`✅ הקובץ "${fileName}" ו-${transactionsToRemove.length} העסקאות שלו נמחקו בהצלחה!`);
-        
-        // אם לא נותרו עסקאות כלל
-        if (appState.extractedTransactions.length === 0) {
-            hideAllContainers();
-            showFileUpload();
+        if (!response.ok) {
+            throw new Error(`Claude API error: ${response.status}`);
         }
         
-        console.log(`✅ קובץ ${fileName} נמחק בהצלחה`);
+        const data = await response.json();
+        console.log('✅ Claude API response:', data);
+        
+        return data.classification;
         
     } catch (error) {
-        console.error(`❌ שגיאה במחיקת קובץ ${fileName}:`, error);
-        alert(`❌ שגיאה במחיקת הקובץ: ${error.message}`);
+        console.error('❌ Claude API failed:', error);
+        return null;
     }
 }
 
-// הצגת מידע מפורט על קבצים טעונים
-function showLoadedFilesInfo() {
-    const filesInfo = getLoadedFilesInfo();
+// פונקציה לעיבוד תוצאות קלוד וממפוי קטגוריות
+function processClaudeResults(businessList, categoriesString) {
+    if (!categoriesString) return {};
     
-    if (filesInfo.length === 0) {
-        alert('לא נטענו קבצים כלל.');
-        return;
-    }
-    
-    const filesDetails = filesInfo.map(info => 
-        `📁 ${info.fileName}\n   └ ${info.transactionCount} עסקאות\n   └ נטען: ${formatDateTime(info.loadedAt)}`
-    ).join('\n\n');
-    
-    const message = `📊 קבצים טעונים במערכת:\n\n${filesDetails}\n\n📈 סה"כ: ${filesInfo.length} קבצים, ${filesInfo.reduce((sum, info) => sum + info.transactionCount, 0)} עסקאות`;
-    
-    alert(message);
-}
-
-// פורמט תאריך ושעה
-function formatDateTime(dateString) {
-    if (!dateString || dateString === 'לא ידוע') return 'לא ידוע';
-    
-    try {
-        const date = new Date(dateString);
-        return date.toLocaleDateString('he-IL') + ' ' + date.toLocaleTimeString('he-IL', {hour: '2-digit', minute: '2-digit'});
-    } catch {
-        return dateString;
-    }
-}
-
-// החלפת הפונקציה הקיימת
-async function analyzeFileDataAdvanced(transactions) {
-    if (!transactions || transactions.length === 0) {
-        alert('לא נמצאו עסקאות לניתוח');
-        showFileUpload();
-        return;
-    }
-    
-    console.log(`🔍 מנתח ${transactions.length} עסקאות חדשות`);
-    
-    // מיזוג עם עסקאות קיימות
-    appState.extractedTransactions = [...(appState.extractedTransactions || []), ...transactions];
-    
-    // המשך עם הסיווג הקיים
-    await categorizeTransactionsWithSmartSystem(appState.extractedTransactions);
-}
-
-// ==========================
-// ENHANCED UI FUNCTIONS - הממשק החדש
-// פונקציות ממשק משופרות
-// ==========================
-
-// עדכון תצוגת כפתורי ניהול נתונים
-function updateDataManagementButtons() {
-    const buttonsContainer = document.getElementById('dataManagementButtons');
-    const hasData = appState.extractedTransactions && appState.extractedTransactions.length > 0;
-    
-    if (buttonsContainer) {
-        buttonsContainer.style.display = hasData ? 'flex' : 'none';
-    }
-}
-
-// הצגת ניהול קבצים מתקדם
-function showAdvancedFileManagement() {
-    const modal = document.getElementById('advancedFileManagement');
-    if (modal) {
-        modal.style.display = 'flex';
-        refreshFilesList();
-    }
-}
-
-// סגירת ניהול קבצים מתקדם
-function closeAdvancedFileManagement() {
-    const modal = document.getElementById('advancedFileManagement');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-}
-
-// רענון רשימת קבצים
-function refreshFilesList() {
-    const filesListContainer = document.getElementById('loadedFilesList');
-    
-    if (!filesListContainer) return;
-    
-    const filesInfo = getLoadedFilesInfo();
-    
-    if (filesInfo.length === 0) {
-        filesListContainer.innerHTML = `
-            <div class="text-center text-slate-500 py-8">
-                <span class="text-4xl">📂</span>
-                <div class="mt-2">לא נטענו קבצים כלל</div>
-            </div>
-        `;
-        return;
-    }
-    
-    filesListContainer.innerHTML = filesInfo.map(info => `
-        <div class="file-item">
-            <div class="file-info">
-                <div class="file-name">📁 ${info.fileName}</div>
-                <div class="file-stats">
-                    ${info.transactionCount} עסקאות • נטען: ${formatDateTime(info.loadedAt)}
-                </div>
-            </div>
-            <div class="file-actions">
-                <button onclick="clearSpecificFile('${info.fileName.replace(/'/g, "\\\'")}')" 
-                        class="btn-small danger" title="מחק קובץ זה">
-                    🗑️ מחק
-                </button>
-            </div>
-        </div>
-    `).join('');
-}
-
-// ייצוא דוח קבצים
-function exportFilesReport() {
-    const filesInfo = getLoadedFilesInfo();
-    
-    if (filesInfo.length === 0) {
-        alert('אין קבצים לייצוא');
-        return;
-    }
-    
-    const reportData = [
-        ['שם קובץ', 'מספר עסקאות', 'תאריך טעינה'],
-        ...filesInfo.map(info => [
-            info.fileName,
-            info.transactionCount,
-            formatDateTime(info.loadedAt)
-        ])
-    ];
-    
-    const csv = Papa.unparse(reportData, { header: true });
-    const BOM = '\uFEFF';
-    
-    const element = document.createElement('a');
-    element.setAttribute('href', 'data:text/csv;charset=utf-8,' + encodeURIComponent(BOM + csv));
-    element.setAttribute('download', `דוח-קבצים-${new Date().toISOString().split('T')[0]}.csv`);
-    element.style.display = 'none';
-    
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
-    
-    alert('✅ דוח קבצים יוצא בהצלחה!');
-}
-
-// עדכון סטטיסטיקות מורחב
-function updateStatsDisplayEnhanced() {
-    // עדכון בסיסי
-    updateStatsDisplay();
-    
-    // עדכון נוסף למונים חדשים
-    const loadedFilesCountElement = document.getElementById('loadedFilesCount');
-    const fileTransactionsCountElement = document.getElementById('fileTransactionsCount');
-    
-    if (loadedFilesCountElement) {
-        loadedFilesCountElement.textContent = appState.loadedFiles ? appState.loadedFiles.size : 0;
-    }
-    
-    if (fileTransactionsCountElement) {
-        fileTransactionsCountElement.textContent = appState.extractedTransactions ? appState.extractedTransactions.length : 0;
-    }
-    
-    // עדכון כפתורי ניהול
-    updateDataManagementButtons();
-}
-
-// sגירת מודל בלחיצה על הרקע
-document.addEventListener('click', function(event) {
-    const modal = document.getElementById('advancedFileManagement');
-    if (modal && event.target === modal) {
-        closeAdvancedFileManagement();
-    }
-});
-
-// [המשך בחלק הבא...]
-
-// ==========================
-// CATEGORIZATION FUNCTIONS - WITH CLAUDE INTEGRATION
-// פונקציות סיווג עם אינטגרציה לקלוד
-// ==========================
-
-function getCategoryClassification(category) {
-    const categoryClassification = {
-        'מזון': 'חובה',
-        'רכב': 'חובה', 
-        'בריאות': 'חובה',
-        'ביטוח': 'חובה',
-        'חשבונות': 'חובה',
-        'חינוך': 'חובה',
-        'דיור': 'חובה',
-        'החזר חוב': 'חובה',
-        'קניות לבית': 'רשות',
-        'השקעות': 'רשות',
-        'פנאי': 'מותרות',
-        'אחר': 'רשות'
+    const categoryMap = {
+        'Vehicle': 'רכב', 'Food': 'מזון', 'Shopping': 'קניות לבית',
+        'Debt': 'החזר חוב', 'Entertainment': 'פנאי', 'Insurance': 'ביטוח',
+        'Education': 'חינוך', 'Bills': 'חשבונות', 'Health': 'בריאות', 
+        'Housing': 'דיור'
     };
-    return categoryClassification[category] || 'רשות';
-}
-
-function getDisplayAmount(transaction) {
-    if (appState.yearlyExpenses.has(transaction.id)) {
-        return Math.floor(transaction.amount / 12);
-    }
-    return transaction.amount;
-}
-
-function getTransactionClassification(transaction) {
-    if (appState.manualClassifications[transaction.id]) {
-        return appState.manualClassifications[transaction.id];
-    }
-    return transaction.classification || getCategoryClassification(transaction.category);
-}
-
-// זיהוי עסקה שנראית כמו הכנסה
-function isLikelyIncome(transaction) {
-    const desc = transaction.description.toLowerCase();
-    const amount = transaction.amount;
     
-    // מילות מפתח להכנסה
-    const incomeKeywords = [
-        'משכורת',
-        'שכר',
-        'salary',
-        'העברה נכנסת',
-        'זיכוי',
-        'קיצבה',
-        'דמי אבטלה',
-        'פיצויים',
-        'מענק',
-        'החזר מס',
-        'לאומי',
-        'ביטוח לאומי'
-    ];
+    const businesses = businessList;
+    const categories = categoriesString.split(',').map(c => c.trim());
     
-    // סכום גבוה (מעל 3000 ש"ח) + מילת מפתח
-    if (amount > 3000 && incomeKeywords.some(keyword => desc.includes(keyword))) {
-        return true;
-    }
-    
-    // סכום גבוה מאוד (מעל 8000 ש"ח) גם בלי מילת מפתח
-    if (amount > 8000) {
-        return true;
-    }
-    
-    return false;
-}
-
-// פונקציה מעודכנת לסיווג עסקאות עם גיבוי קלוד
-async function categorizeTransactionsWithSmartSystem(transactions) {
-    const categorized = [];
-    const unknownBusinesses = new Map(); // משתמשים ב-Map כדי לעקוב אחר סכומים
-    
-    // שלב 1: סיווג רגיל עם האלגוריתם הקיים
-    for (const transaction of transactions) {
-        const desc = transaction.description.toLowerCase();
-        let category = null;
-        let source = '';
+    const results = {};
+    for (let i = 0; i < businesses.length && i < categories.length; i++) {
+        const business = businesses[i];
+        const englishCategory = categories[i];
+        const hebrewCategory = categoryMap[englishCategory] || 'אחר';
         
-        // בדיקת mapping ידני
-        const exactMatch = Object.keys(appState.businessMappings).find(business => 
-            desc.includes(business.toLowerCase())
-        );
+        results[business] = hebrewCategory;
+        console.log(`🎯 Claude classified: ${business} → ${hebrewCategory}`);
+    }
+    
+    return results;
+}
+
+// פונקציה לשמירת עסקים חדשים שסווגו על ידי קלוד
+async function saveClaudeClassifiedBusinesses(businessCategories) {
+    try {
+        console.log('💾 Saving Claude classifications to Firebase...');
         
-        if (exactMatch) {
-            category = appState.businessMappings[exactMatch];
-            source = 'ידני';
-        } else {
-            // בדיקת מאגר עסקים
-            const dbMatch = Object.keys(appState.loadedBusinessDatabase).find(business => 
-                desc.includes(business.toLowerCase())
-            );
+        for (const [businessName, category] of Object.entries(businessCategories)) {
+            await window.addDoc(window.collection(window.firebaseDb, 'businessdatabase'), {
+                'שם עסק': businessName,
+                'קטגוריה': category,
+                'נוסף על ידי': 'Claude API',
+                'מקור': 'AI Classification',
+                'תאריך הוספה': new Date().toISOString()
+            });
             
-            if (dbMatch) {
-                category = appState.loadedBusinessDatabase[dbMatch];
-                source = 'מאגר';
-            } else {
-                // בדיקת מילות מפתח
-                let foundKeyword = false;
-                for (const [keyword, keywordCategory] of Object.entries(appState.loadedKeywords)) {
-                    if (desc.includes(keyword.toLowerCase())) {
-                        category = keywordCategory;
-                        source = 'מילות מפתח';
-                        foundKeyword = true;
-                        break;
-                    }
-                }
-                
-                // אנגלית = פנאי
-                if (!foundKeyword && /[a-zA-Z]/.test(transaction.description)) {
-                    category = 'פנאי';
-                    source = 'אנגלית';
-                }
-                
-                // לא נמצא - הוספה לעסקים לא ידועים
-                if (!category) {
-                    const businessName = transaction.description.trim();
-                    
-                    if (!unknownBusinesses.has(businessName)) {
-                        unknownBusinesses.set(businessName, 0);
-                    }
-                    unknownBusinesses.set(businessName, 
-                        unknownBusinesses.get(businessName) + transaction.amount
-                    );
-                    
-                    category = 'אחר';
-                    source = 'לא זוהה';
-                }
-            }
+            // עדכון גם במאגר המקומי
+            appState.loadedBusinessDatabase[businessName.toLowerCase()] = category;
         }
         
-        categorized.push({
-            ...transaction,
-            category: category,
-            classification: category ? getCategoryClassification(category) : 'רשות',
-            source
-        });
-    }
-    
-    // שלב 2: סימון הוצאות שנתיות ושמירה
-    const newYearlyExpenses = new Set(appState.yearlyExpenses);
-    categorized.forEach(transaction => {
-        if (transaction.category === 'קניות לבית') {
-            newYearlyExpenses.add(transaction.id);
-        }
-    });
-    appState.yearlyExpenses = newYearlyExpenses;
-
-    appState.categorizedData = categorized;
-    updateDisplay();
-    
-    // שמירה אוטומטית
-    await autoSaveToFirebase();
-}
-
-// הוספה לתחילת expenses-app.js
-// טען השלמה לשימוש עם SheetJS להפיכת Excel
-// הוסף זאת ל-head של HTML:
-// <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
-// פונקציה מתקדמת להחלפת handleFileUpload הקיימת
-async function handleFileUploadAdvanced(event) {
-    const files = Array.from(event.target.files);
-    if (files.length === 0) return;
-    
-    console.log('🚀 Advanced Bank Processor - התחלת עיבוד קבצים:', files.map(f => f.name));
-    
-    appState.uploadedFiles = files.map(f => f.name);
-    let allTransactions = [];
-    let filesProcessed = 0;
-    let duplicateFiles = [];
-    
-    for (const file of files) {
-        try {
-            console.log(`📁 מעבד קובץ: ${file.name}`);
-            
-            // שלב 1: זיהוי סוג קובץ וקריאה
-            const fileData = await readFileAdvanced(file);
-            
-            if (!fileData || fileData.length === 0) {
-                console.log(`⚠️ קובץ ריק או לא נתמך: ${file.name}`);
-                continue;
-            }
-            
-            // שלב 2: ניקוי ועיבוד הנתונים
-            const cleanedData = cleanBankData(fileData, file.name);
-            
-            if (!cleanedData || cleanedData.length === 0) {
-                console.log(`⚠️ לא נמצאו נתונים תקינים בקובץ: ${file.name}`);
-                continue;
-            }
-            
-            // שלב 3: זיהוי עמודות ויצירת עסקאות
-            const transactions = await processBankTransactions(cleanedData, file.name);
-            
-            if (!transactions || transactions.length === 0) {
-                console.log(`⚠️ לא נמצאו עסקאות בקובץ: ${file.name}`);
-                continue;
-            }
-            
-            // שלב 4: בדיקת כפילויות
-            const isDuplicate = checkForDuplicateFile(transactions);
-            
-            if (isDuplicate) {
-                duplicateFiles.push(file.name);
-                console.log(`🔄 קובץ כפול זוהה: ${file.name}`);
-                continue;
-            }
-            
-            // שלב 5: הוספה לנתונים
-            allTransactions = [...allTransactions, ...transactions];
-            filesProcessed++;
-            
-            console.log(`✅ קובץ עובד בהצלחה: ${file.name} - ${transactions.length} עסקאות`);
-            
-        } catch (error) {
-            console.error(`❌ שגיאה בעיבוד הקובץ ${file.name}:`, error);
-            alert(`שגיאה בעיבוד הקובץ ${file.name}: ${error.message}`);
-        }
-    }
-    
-    // דיווח על תוצאות
-    if (duplicateFiles.length > 0) {
-        alert(`🔄 הקבצים הבאים כבר נטענו קודם ולא יעובדו שוב:\n${duplicateFiles.join('\n')}`);
-    }
-    
-    if (filesProcessed > 0 && allTransactions.length > 0) {
-        console.log(`🎉 סיכום: עובדו ${filesProcessed} קבצים עם ${allTransactions.length} עסקאות`);
+        console.log('✅ Claude classifications saved successfully');
+        updateStatsDisplay();
         
-        // מיזוג עם נתונים קיימים
-        appState.rawData = [...(appState.rawData || []), ...allTransactions];
-        appState.extractedTransactions = [...(appState.extractedTransactions || []), ...allTransactions];
-        
-        hideFileUpload();
-        
-        setTimeout(() => {
-            analyzeFileDataAdvanced(allTransactions);
-        }, 500);
-        
-    } else if (duplicateFiles.length > 0 && filesProcessed === 0) {
-        alert('כל הקבצים שהועלו כבר קיימים במערכת.');
-    } else {
-        alert('לא נמצאו נתונים תקינים באף אחד מהקבצים.');
+    } catch (error) {
+        console.error('❌ Failed to save Claude classifications:', error);
     }
 }
 
-// בדיקת כפילויות קובץ
-function checkForDuplicateFile(newTransactions) {
-    if (!appState.extractedTransactions || appState.extractedTransactions.length === 0) {
-        return false;
-    }
-    
-    // בדיקה של 3+ עסקאות זהות
-    let matchCount = 0;
-    
-    for (const newTx of newTransactions.slice(0, 10)) { // בדיקה של עד 10 עסקאות ראשונות
-        const exists = appState.extractedTransactions.some(existingTx => {
-            return existingTx.date === newTx.date &&
-                   existingTx.description === newTx.description &&
-                   existingTx.amount === newTx.amount;
-        });
-        
-        if (exists) {
-            matchCount++;
-            if (matchCount >= 3) {
-                return true;
-            }
-        }
-    }
-    
-    return false;
-}
-
-// המשך של הקוד הקיים...
-// [שאר הפונקציות נשארות כמו שהן מהקוד המקורי]
-
-// ==========================
+// =========================
 // LOADING STATUS FUNCTIONS
-// פונקציות סטטוס טעינה
-// ==========================
+// =========================
 
 function updateLoadingStatus(elementId, message) {
     console.log(`🔄 updateLoadingStatus: מעדכן ${elementId} עם הודעה: ${message}`);
@@ -1967,145 +733,413 @@ function updateStatsDisplay() {
     }
 }
 
-// הפונקציות הקיימות נשארות ללא שינוי...
-// [פונקציות מהקוד המקורי]
+// =========================
+// FILE UPLOAD FUNCTIONS
+// =========================
 
-async function autoSaveToFirebase() {
-    try {
-        if (!appState.currentUser || appState.categorizedData.length === 0) {
-            return;
-        }
-
-        console.log('💾 Auto-saving to Firebase...');
-        
-        const userAnalysisRef = window.doc(window.firebaseDb, 'userAnalysis', appState.currentUser.uid);
-        
-        const analysisData = {
-            userId: appState.currentUser.uid,
-            userEmail: appState.currentUser.email,
-            lastUpdated: new Date().toISOString(),
-            transactions: appState.categorizedData.map(transaction => ({
-                id: transaction.id,
-                date: transaction.date,
-                description: transaction.description,
-                amount: transaction.amount,
-                category: transaction.category,
-                classification: getTransactionClassification(transaction),
-                isYearly: appState.yearlyExpenses.has(transaction.id),
-                isDeleted: appState.deletedTransactions.has(transaction.id)
-            })),
-            businessMappings: appState.businessMappings,
-            manualClassifications: appState.manualClassifications,
-            minAmountFilter: appState.minAmountFilter,
+async function handleFileUpload(event) {
+    const files = Array.from(event.target.files);
+    if (files.length === 0) return;
+    
+    appState.uploadedFiles = files.map(f => f.name);
+    let allData = [];
+    let filesProcessed = 0;
+    
+    for (const file of files) {
+        try {
+            let fileData = [];
             
-            // נתונים חדשים
-            monthlyIncomes: appState.monthlyIncomes,
-            netWorth: appState.netWorth,
-            loadedFiles: Array.from(appState.loadedFiles)
-        };
-
-        await window.setDoc(userAnalysisRef, analysisData);
-        
-        // Save new businesses to the shared database
-        await saveNewBusinessesToDatabase();
-        
-        console.log('✅ Auto-save completed successfully');
-        
-    } catch (error) {
-        console.error('❌ Auto-save failed:', error);
-    }
-}
-
-async function saveNewBusinessesToDatabase() {
-    try {
-        if (Object.keys(appState.newBusinessesToSave).length === 0) {
-            return;
-        }
-
-        console.log('💾 Saving new businesses to database:', appState.newBusinessesToSave);
-        
-        for (const [businessName, category] of Object.entries(appState.newBusinessesToSave)) {
-            await window.addDoc(window.collection(window.firebaseDb, 'businessdatabase'), {
-                'שם עסק': businessName,
-                'קטגוריה': category,
-                'נוסף על ידי': appState.currentUser.email,
-                'תאריך הוספה': new Date().toISOString()
-            });
-        }
-        
-        // Add to local database
-        Object.entries(appState.newBusinessesToSave).forEach(([business, category]) => {
-            appState.loadedBusinessDatabase[business.toLowerCase()] = category;
-        });
-        
-        // Clear the new businesses queue
-        appState.newBusinessesToSave = {};
-        updateStatsDisplay();
-        
-        console.log('✅ New businesses saved successfully');
-        
-    } catch (error) {
-        console.error('❌ Failed to save new businesses:', error);
-    }
-}
-
-async function loadUserAnalysis() {
-    try {
-        if (!appState.currentUser) return;
-
-        const userAnalysisDoc = await window.getDoc(window.doc(window.firebaseDb, 'userAnalysis', appState.currentUser.uid));
-        
-        if (userAnalysisDoc.exists()) {
-            const data = userAnalysisDoc.data();
-            
-            if (data.transactions && data.transactions.length > 0) {
-                appState.categorizedData = data.transactions.map(t => ({
-                    id: t.id,
-                    date: t.date,
-                    description: t.description,
-                    amount: t.amount,
-                    category: t.category,
-                    classification: t.classification,
-                    originalRow: 0
-                }));
-
-                appState.extractedTransactions = [...appState.categorizedData];
-                appState.businessMappings = data.businessMappings || {};
-                appState.manualClassifications = data.manualClassifications || {};
-                appState.minAmountFilter = data.minAmountFilter || 0;
-                
-                appState.yearlyExpenses = new Set();
-                appState.deletedTransactions = new Set();
-                
-                data.transactions.forEach(t => {
-                    if (t.isYearly) appState.yearlyExpenses.add(t.id);
-                    if (t.isDeleted) appState.deletedTransactions.add(t.id);
+            if (file.type === 'text/csv' || file.name.endsWith('.csv')) {
+                await new Promise((resolve, reject) => {
+                    Papa.parse(file, {
+                        header: true,
+                        skipEmptyLines: true,
+                        complete: (results) => {
+                            fileData = results.data;
+                            resolve();
+                        },
+                        error: (error) => {
+                            reject(error);
+                        }
+                    });
                 });
+            } else {
+                alert('קובץ ' + file.name + ' לא נתמך - רק קבצי CSV');
+                continue;
+            }
+            
+            allData = [...allData, ...fileData];
+            filesProcessed++;
+            
+        } catch (error) {
+            alert('שגיאה בעיבוד הקובץ ' + file.name + ': ' + error.message);
+            console.error('שגיאה בעיבוד קובץ:', error);
+        }
+    }
+    
+    if (filesProcessed > 0 && allData.length > 0) {
+        appState.rawData = allData;
+        appState.extractedTransactions = [];
+        appState.categorizedData = [];
+        appState.yearlyExpenses = new Set();
+        appState.manualClassifications = {};
+        appState.newBusinessesToSave = {};
+        appState.originalBusinessMappings = {...appState.businessMappings};
+        hideFileUpload();
+        
+        setTimeout(() => {
+            analyzeFileData(allData);
+        }, 500);
+    } else {
+        alert('לא נמצאו נתונים תקינים בקבצים');
+    }
+}
 
-                // טעינת נתונים חדשים
-                appState.monthlyIncomes = data.monthlyIncomes || {};
-                appState.netWorth = data.netWorth || appState.netWorth;
-                if (data.loadedFiles) {
-                    appState.loadedFiles = new Set(data.loadedFiles);
-                }
-
-                document.getElementById('minAmountFilter').value = appState.minAmountFilter;
+async function analyzeFileData(dataToAnalyze) {
+    if (!dataToAnalyze || dataToAnalyze.length === 0) {
+        alert('לא נמצאו נתונים לניתוח');
+        showFileUpload();
+        return;
+    }
+    
+    const availableColumns = Object.keys(dataToAnalyze[0] || {});
+    
+    if (availableColumns.length === 0) {
+        alert('קובץ ריק או לא תקין');
+        showFileUpload();
+        return;
+    }
+    
+    // Auto-detect columns
+    let amountCol = availableColumns.find(col => {
+        const colLower = col.toLowerCase();
+        return (colLower.includes('סכום') || 
+               colLower.includes('amount') ||
+               colLower.includes('קנייה') ||
+               colLower.includes('חיוב') ||
+               colLower.includes('ש"ח') ||
+               colLower.includes('שח') ||
+               colLower.includes('debit') ||
+               colLower.includes('credit')) && 
+               col.length < 50;
+    }) || '';
+    
+    let descriptionCol = availableColumns.find(col => {
+        const colLower = col.toLowerCase();
+        return (colLower.includes('בית') || 
+               colLower.includes('עסק') || 
+               colLower.includes('תיאור') ||
+               colLower.includes('שם') ||
+               colLower.includes('business') ||
+               colLower.includes('description') ||
+               colLower.includes('מקום') ||
+               colLower.includes('ספק') ||
+               colLower.includes('פירוט')) && 
+               col.length < 100;
+    }) || '';
+    
+    let dateCol = availableColumns.find(col => {
+        const colLower = col.toLowerCase();
+        return (colLower.includes('תאריך') || 
+               colLower.includes('date') ||
+               colLower.includes('יום')) && 
+               col.length < 50;
+    }) || '';
+    
+    // Fallback detection
+    if (!amountCol) {
+        for (const col of availableColumns) {
+            if (col.length > 50) continue;
+            
+            const sampleValues = dataToAnalyze.slice(0, 10).map(row => row[col]).filter(val => val);
+            const hasNumbers = sampleValues.some(val => {
+                const str = val?.toString().trim();
+                if (!str || str.length > 20) return false;
                 
-                hideFileUpload();
-                updateDisplay();
-                
-                console.log('✅ נתוני משתמש נטענו מבסיס הנתונים');
+                const cleanStr = str.replace(/[^\d.,\-]/g, '');
+                return cleanStr.length > 0 && 
+                       /^\d{1,7}([,.]?\d{0,3})?$/.test(cleanStr) && 
+                       parseFloat(cleanStr.replace(',', '')) > 0 &&
+                       parseFloat(cleanStr.replace(',', '')) < 1000000;
+            });
+            if (hasNumbers) {
+                amountCol = col;
+                break;
             }
         }
+    }
+    
+    if (!descriptionCol) {
+        for (const col of availableColumns) {
+            if (col !== amountCol && col !== dateCol && col.length < 100) {
+                const sampleValues = dataToAnalyze.slice(0, 10).map(row => row[col]).filter(val => val);
+                const hasText = sampleValues.some(val => {
+                    const str = val?.toString().trim();
+                    return str && str.length > 3 && str.length < 200 && /[א-ת\w]/.test(str);
+                });
+                if (hasText) {
+                    descriptionCol = col;
+                    break;
+                }
+            }
+        }
+    }
+    
+    if (!amountCol && availableColumns.length > 1) {
+        amountCol = availableColumns[availableColumns.length - 1];
+    }
+    
+    if (!descriptionCol && availableColumns.length > 0) {
+        descriptionCol = availableColumns.find(col => col !== amountCol && col !== dateCol) || availableColumns[0];
+    }
+    
+    if (!dateCol && availableColumns.length > 2) {
+        dateCol = availableColumns[0];
+    }
+    
+    if (!amountCol || !descriptionCol) {
+        alert('🚨 לא הצלחתי לזהות עמודות חיוניות בקובץ\n\nעמודות שנמצאו בקובץ: ' + availableColumns.join(', ') + '\n\nעמודות שזוהו:\n- עמודת סכום: ' + (amountCol || 'לא נמצא') + '\n- עמודת תיאור: ' + (descriptionCol || 'לא נמצא') + '\n- עמודת תאריך: ' + (dateCol || 'לא נמצא'));
+        showFileUpload();
+        return;
+    }
+    
+    try {
+        // Extract transactions
+        const transactions = [];
+        
+        dataToAnalyze.forEach((row, idx) => {
+            const dateValue = dateCol ? row[dateCol] : '';
+            const amountValue = amountCol ? row[amountCol] : '';
+            const descValue = descriptionCol ? row[descriptionCol] : '';
+            
+            if (amountValue && descValue) {
+                const amountStr = amountValue?.toString().trim();
+                const descStr = descValue?.toString().trim().toLowerCase();
+                
+                if (!amountStr || amountStr.length > 20 || 
+                    amountStr.includes('פירוט') || amountStr.includes('עסקאות') ||
+                    amountStr.includes('חשבון') || amountStr.includes('דיסקונט')) {
+                    return;
+                }
+                
+                if (descStr.includes('סה"כ') || descStr.includes('סה״כ') || 
+                    descStr.includes('סך הכל') || descStr.includes('סכום כולל') ||
+                    descStr.includes('סיכום') || descStr.includes('total') || 
+                    descStr.includes('sum') || descStr.includes('סה׳׳כ') ||
+                    descStr.includes('עד היום') || descStr.includes('מצב סופי') ||
+                    descStr.includes('יתרה') || descStr.includes('balance')) {
+                    return;
+                }
+                
+                const cleanAmount = amountStr.replace(/[^\d.,-]/g, '').replace(/,/g, '');
+                
+                if (!/^\d+\.?\d*$/.test(cleanAmount)) {
+                    return;
+                }
+                
+                const numAmount = parseFloat(cleanAmount) || 0;
+                
+                if (numAmount > 0 && numAmount < 1000000) {
+                    transactions.push({
+                        id: 'tx_' + idx,
+                        date: dateValue?.toString().trim() || '',
+                        description: descValue?.toString().trim() || 'לא צוין',
+                        amount: Math.floor(numAmount),
+                        originalRow: idx,
+                        category: 'לא מסווג',
+                        rawData: row
+                    });
+                }
+            }
+        });
+        
+        if (transactions.length === 0) {
+            alert('לא נמצאו עסקאות תקינות בקובץ.');
+            showFileUpload();
+            return;
+        }
+        
+        appState.extractedTransactions = transactions;
+        
+        // Categorize transactions using the smart system with Claude backup
+        await categorizeTransactionsWithSmartSystem(transactions);
+        
     } catch (error) {
-        console.error('❌ שגיאה בטעינת נתוני משתמש:', error);
+        console.error('❌ שגיאה בניתוח:', error);
+        alert('שגיאה בניתוח: ' + error.message);
+        showFileUpload();
     }
 }
 
-// ==========================
+// =========================
+// CATEGORIZATION FUNCTIONS - WITH CLAUDE INTEGRATION
+// =========================
+
+function getCategoryClassification(category) {
+    const categoryClassification = {
+        'מזון': 'חובה',
+        'רכב': 'חובה', 
+        'בריאות': 'חובה',
+        'ביטוח': 'חובה',
+        'חשבונות': 'חובה',
+        'חינוך': 'חובה',
+        'דיור': 'חובה',
+        'החזר חוב': 'חובה',
+        'קניות לבית': 'רשות',
+        'השקעות': 'רשות',
+        'פנאי': 'מותרות',
+        'אחר': 'רשות'
+    };
+    return categoryClassification[category] || 'רשות';
+}
+
+function getDisplayAmount(transaction) {
+    if (appState.yearlyExpenses.has(transaction.id)) {
+        return Math.floor(transaction.amount / 12);
+    }
+    return transaction.amount;
+}
+
+function getTransactionClassification(transaction) {
+    if (appState.manualClassifications[transaction.id]) {
+        return appState.manualClassifications[transaction.id];
+    }
+    return transaction.classification || getCategoryClassification(transaction.category);
+}
+
+// פונקציה מעודכנת לסיווג עסקאות עם גיבוי קלוד
+async function categorizeTransactionsWithSmartSystem(transactions) {
+    const categorized = [];
+    const unknownBusinesses = new Map(); // משתמשים ב-Map כדי לעקוב אחר סכומים
+    
+    // שלב 1: סיווג רגיל עם האלגוריתם הקיים
+    for (const transaction of transactions) {
+        const desc = transaction.description.toLowerCase();
+        let category = null;
+        let source = '';
+        
+        // בדיקת mapping ידני
+        const exactMatch = Object.keys(appState.businessMappings).find(business => 
+            desc.includes(business.toLowerCase())
+        );
+        
+        if (exactMatch) {
+            category = appState.businessMappings[exactMatch];
+            source = 'ידני';
+        } else {
+            // בדיקת מאגר עסקים
+            const dbMatch = Object.keys(appState.loadedBusinessDatabase).find(business => 
+                desc.includes(business.toLowerCase())
+            );
+            
+            if (dbMatch) {
+                category = appState.loadedBusinessDatabase[dbMatch];
+                source = 'מאגר';
+            } else {
+                // בדיקת מילות מפתח
+                let foundKeyword = false;
+                for (const [keyword, keywordCategory] of Object.entries(appState.loadedKeywords)) {
+                    if (desc.includes(keyword.toLowerCase())) {
+                        category = keywordCategory;
+                        source = 'מילות מפתח';
+                        foundKeyword = true;
+                        break;
+                    }
+                }
+                
+                // אנגלית = פנאי
+                if (!foundKeyword && /[a-zA-Z]/.test(transaction.description)) {
+                    category = 'פנאי';
+                    source = 'אנגלית';
+                }
+                
+                // לא נמצא - הוספה לעסקים לא ידועים
+                if (!category) {
+                    const businessName = transaction.description.trim();
+                    
+                    if (!unknownBusinesses.has(businessName)) {
+                        unknownBusinesses.set(businessName, 0);
+                    }
+                    unknownBusinesses.set(businessName, 
+                        unknownBusinesses.get(businessName) + transaction.amount
+                    );
+                    
+                    category = 'אחר';
+                    source = 'לא זוהה';
+                }
+            }
+        }
+        
+        categorized.push({
+            ...transaction,
+            category: category,
+            classification: category ? getCategoryClassification(category) : 'רשות',
+            source
+        });
+    }
+    
+    // שלב 2: טיפול בעסקים לא ידועים עם קלוד
+    if (unknownBusinesses.size > 0) {
+        console.log(`🔍 Found ${unknownBusinesses.size} unknown businesses, checking Claude eligibility...`);
+        
+        // סינון לטופ 10 עם יותר מ-100 שקל
+        const eligibleBusinesses = Array.from(unknownBusinesses.entries())
+            .filter(([business, amount]) => amount >= 100)
+            .sort(([,a], [,b]) => b - a)
+            .slice(0, 10)
+            .map(([business]) => business);
+        
+        if (eligibleBusinesses.length > 0) {
+            console.log(`🤖 Sending ${eligibleBusinesses.length} businesses to Claude:`, eligibleBusinesses);
+            
+            // שליחה לקלוד
+            const claudeResult = await classifyWithClaude(eligibleBusinesses);
+            
+            if (claudeResult) {
+                // עיבוד תוצאות
+                const businessCategories = processClaudeResults(eligibleBusinesses, claudeResult);
+                
+                if (Object.keys(businessCategories).length > 0) {
+                    // שמירה ב-Firebase
+                    await saveClaudeClassifiedBusinesses(businessCategories);
+                    
+                    // עדכון העסקאות הקיימות עם הסיווג החדש
+                    categorized.forEach(transaction => {
+                        if (businessCategories[transaction.description.trim()]) {
+                            const newCategory = businessCategories[transaction.description.trim()];
+                            transaction.category = newCategory;
+                            transaction.classification = getCategoryClassification(newCategory);
+                            transaction.source = 'Claude AI';
+                        }
+                    });
+                    
+                    console.log(`✅ Updated ${Object.keys(businessCategories).length} businesses with Claude classifications`);
+                }
+            }
+        } else {
+            console.log('ℹ️ No businesses eligible for Claude classification (need >100₪)');
+        }
+    }
+    
+    // שלב 3: סימון הוצאות שנתיות ושמירה
+    const newYearlyExpenses = new Set(appState.yearlyExpenses);
+    categorized.forEach(transaction => {
+        if (transaction.category === 'קניות לבית') {
+            newYearlyExpenses.add(transaction.id);
+        }
+    });
+    appState.yearlyExpenses = newYearlyExpenses;
+
+    appState.categorizedData = categorized;
+    updateDisplay();
+    
+    // שמירה אוטומטית
+    await autoSaveToFirebase();
+}
+
+// =========================
 // DISPLAY UPDATE FUNCTIONS
-// פונקציות עדכון תצוגה
-// ==========================
+// =========================
 
 function updateDisplay() {
     updateAlerts();
@@ -2113,12 +1147,6 @@ function updateDisplay() {
     updateChart();
     updateBusinessAnalysis();
     updateStatsDisplay();
-    
-    // הוספות חדשות
-    updateStatsDisplayEnhanced();
-    updateDataManagementButtons();
-    updateCashflowButtonVisibility();
-    updateNetWorthButtonVisibility();
 }
 
 function updateAlerts() {
@@ -2147,6 +1175,11 @@ function updateAlerts() {
                 </div>
             </div>
         `;
+    } else {
+        alertsContainer.classList.add('hidden');
+    }
+}
+
 function updateResults() {
     const filteredData = getFilteredTransactions();
     if (filteredData.length === 0) {
@@ -2334,6 +1367,10 @@ function createPieChart(data) {
                 animateRotate: true,
                 duration: 1000
             }
+        }
+    });
+}
+
 function updateBusinessAnalysis() {
     const filteredData = getFilteredTransactions();
     if (filteredData.length === 0) {
@@ -2484,10 +1521,9 @@ function updateBusinessAnalysis() {
     updateDeletedBusinessesTable();
 }
 
-// ==========================
+// =========================
 // BUSINESS FUNCTIONS
-// פונקציות עסקים
-// ==========================
+// =========================
 
 function sortBusinessTable(field) {
     const currentOrder = appState.sortOrder.business;
@@ -2664,11 +1700,14 @@ function restoreBusinessTransactions(business) {
     autoSaveToFirebase();
 }
 
+function toggleShowMoreBusinesses() {
+    appState.showAllBusinesses = !appState.showAllBusinesses;
+    updateBusinessAnalysis();
+}
 
-// ==========================
+// =========================
 // TRANSACTIONS TABLE FUNCTIONS
-// פונקציות טבלת עסקאות
-// ==========================
+// =========================
 
 function toggleTransactionsTable() {
     appState.showTransactions = !appState.showTransactions;
@@ -2925,10 +1964,9 @@ function toggleShowMoreTransactions() {
     updateTransactionsTable();
 }
 
-// ==========================
+// =========================
 // CATEGORY DETAILS FUNCTIONS
-// פונקציות פירוט קטגוריות
-// ==========================
+// =========================
 
 function showCategoryDetails(category) {
     appState.selectedCategoryDetails = category;
@@ -3014,416 +2052,9 @@ function closeCategoryDetails() {
     updateResults(); // Refresh without the details table
 }
 
-// ==========================
-// MONTHLY CASHFLOW FUNCTIONS
-// פונקציות תזרים חודשי
-// ==========================
-
-function showMonthlyCashflow() {
-    appState.showCashflowTable = !appState.showCashflowTable;
-    
-    if (appState.showCashflowTable) {
-        calculateMonthlyCashflow();
-        renderMonthlyCashflowTable();
-        document.getElementById('monthlyCashflowModal').style.display = 'flex';
-    } else {
-        document.getElementById('monthlyCashflowModal').style.display = 'none';
-    }
-}
-
-function closeMonthlyCashflow() {
-    appState.showCashflowTable = false;
-    document.getElementById('monthlyCashflowModal').style.display = 'none';
-}
-
-function calculateMonthlyCashflow() {
-    const transactions = getFilteredTransactions();
-    const monthlyData = {};
-    
-    // חישוב הוצאות לפי חודש
-    transactions.forEach(transaction => {
-        if (appState.deletedTransactions.has(transaction.id)) return;
-        
-        const date = transaction.date;
-        let monthKey;
-        
-        // ניסיון לפרס תאריך
-        try {
-            let parsedDate;
-            if (date.includes('/')) {
-                const parts = date.split('/');
-                parsedDate = new Date(parts[2], parts[1] - 1, parts[0]);
-            } else if (date.includes('-')) {
-                parsedDate = new Date(date);
-            } else {
-                parsedDate = new Date();
-            }
-            
-            monthKey = `${parsedDate.getFullYear()}-${String(parsedDate.getMonth() + 1).padStart(2, '0')}`;
-        } catch {
-            monthKey = 'לא ידוע';
-        }
-        
-        if (!monthlyData[monthKey]) {
-            monthlyData[monthKey] = {
-                expenses: 0,
-                income: 0,
-                transactions: []
-            };
-        }
-        
-        const amount = getDisplayAmount(transaction);
-        monthlyData[monthKey].expenses += amount;
-        monthlyData[monthKey].transactions.push(transaction);
-    });
-    
-    // הוספת הכנסות מהגדרות ידניות
-    Object.entries(appState.monthlyIncomes).forEach(([month, income]) => {
-        if (!monthlyData[month]) {
-            monthlyData[month] = {
-                expenses: 0,
-                income: 0,
-                transactions: []
-            };
-        }
-        monthlyData[month].income = income;
-    });
-    
-    // זיהוי הכנסות מעו"ש (סכומים גבוהים שהושגו מקבצי בנק)
-    transactions.forEach(transaction => {
-        if (transaction.accountType === 'עו"ש' && isLikelyIncome(transaction)) {
-            const date = transaction.date;
-            let monthKey;
-            
-            try {
-                let parsedDate;
-                if (date.includes('/')) {
-                    const parts = date.split('/');
-                    parsedDate = new Date(parts[2], parts[1] - 1, parts[0]);
-                } else if (date.includes('-')) {
-                    parsedDate = new Date(date);
-                } else {
-                    parsedDate = new Date();
-                }
-                
-                monthKey = `${parsedDate.getFullYear()}-${String(parsedDate.getMonth() + 1).padStart(2, '0')}`;
-            } catch {
-                monthKey = 'לא ידוע';
-            }
-            
-            if (monthlyData[monthKey]) {
-                monthlyData[monthKey].income += transaction.amount;
-            }
-        }
-    });
-    
-    appState.monthlyCashflow = monthlyData;
-}
-
-function renderMonthlyCashflowTable() {
-    const tableBody = document.getElementById('cashflowTableBody');
-    const months = Object.keys(appState.monthlyCashflow).sort().reverse();
-    
-    if (months.length === 0) {
-        tableBody.innerHTML = `
-            <tr>
-                <td colspan="5" class="p-8 text-center text-slate-500">
-                    לא נמצאו נתונים לתזרים חודשי
-                </td>
-            </tr>
-        `;
-        return;
-    }
-    
-    tableBody.innerHTML = months.map(month => {
-        const data = appState.monthlyCashflow[month];
-        const income = data.income || 0;
-        const expenses = data.expenses || 0;
-        const balance = income - expenses;
-        const savingsPercent = income > 0 ? ((balance / income) * 100).toFixed(1) : '0.0';
-        
-        const balanceColor = balance >= 0 ? 'text-green-600' : 'text-red-600';
-        const savingsColor = parseFloat(savingsPercent) >= 10 ? 'text-green-600' : 
-                            parseFloat(savingsPercent) >= 0 ? 'text-yellow-600' : 'text-red-600';
-        
-        return `
-            <tr class="border-b border-slate-100 hover:bg-slate-50">
-                <td class="p-4 font-semibold">${formatMonthDisplay(month)}</td>
-                <td class="p-4">
-                    <span class="editable-income cursor-pointer hover:bg-blue-50 px-2 py-1 rounded" 
-                          onclick="editMonthlyIncome('${month}', ${income})">
-                        ₪${income.toLocaleString()}
-                        <span class="text-xs text-slate-500 mr-2">✏️</span>
-                    </span>
-                </td>
-                <td class="p-4 font-semibold">₪${expenses.toLocaleString()}</td>
-                <td class="p-4 font-bold ${balanceColor}">₪${balance.toLocaleString()}</td>
-                <td class="p-4 font-semibold ${savingsColor}">${savingsPercent}%</td>
-            </tr>
-        `;
-    }).join('');
-    
-    // סיכום כולל
-    const totalIncome = months.reduce((sum, month) => sum + (appState.monthlyCashflow[month].income || 0), 0);
-    const totalExpenses = months.reduce((sum, month) => sum + (appState.monthlyCashflow[month].expenses || 0), 0);
-    const totalBalance = totalIncome - totalExpenses;
-    const totalSavingsPercent = totalIncome > 0 ? ((totalBalance / totalIncome) * 100).toFixed(1) : '0.0';
-    
-    const summaryElement = document.getElementById('cashflowSummary');
-    if (summaryElement) {
-        summaryElement.innerHTML = `
-            <div class="bg-slate-100 p-4 rounded-lg border-t-2 border-slate-300">
-                <div class="grid grid-cols-5 gap-4 text-center font-bold">
-                    <div>סה"כ ${months.length} חודשים</div>
-                    <div class="text-blue-600">₪${totalIncome.toLocaleString()}</div>
-                    <div class="text-slate-700">₪${totalExpenses.toLocaleString()}</div>
-                    <div class="${totalBalance >= 0 ? 'text-green-600' : 'text-red-600'}">₪${totalBalance.toLocaleString()}</div>
-                    <div class="${parseFloat(totalSavingsPercent) >= 10 ? 'text-green-600' : 'text-yellow-600'}">${totalSavingsPercent}%</div>
-                </div>
-            </div>
-        `;
-    }
-}
-
-function formatMonthDisplay(monthKey) {
-    const [year, month] = monthKey.split('-');
-    const monthNames = [
-        'ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
-        'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'
-    ];
-    
-    return `${monthNames[parseInt(month) - 1]} ${year}`;
-}
-
-function editMonthlyIncome(month, currentIncome) {
-    const newIncome = prompt(`עדכן הכנסה חודשית עבור ${formatMonthDisplay(month)}:`, currentIncome);
-    
-    if (newIncome !== null) {
-        const amount = parseFloat(newIncome) || 0;
-        appState.monthlyIncomes[month] = amount;
-        
-        // עדכון התצוגה
-        calculateMonthlyCashflow();
-        renderMonthlyCashflowTable();
-        
-        // שמירה
-        autoSaveToFirebase();
-    }
-}
-
-function updateCashflowButtonVisibility() {
-    const cashflowButton = document.getElementById('cashflowButton');
-    const hasTransactions = appState.categorizedData && appState.categorizedData.length > 0;
-    
-    if (cashflowButton) {
-        cashflowButton.style.display = hasTransactions ? 'inline-flex' : 'none';
-    }
-}
-
-// ==========================
-// NET WORTH FUNCTIONS
-// פונקציות שווי נקי
-// ==========================
-
-function showNetWorth() {
-    appState.showNetWorthPanel = !appState.showNetWorthPanel;
-    
-    if (appState.showNetWorthPanel) {
-        calculateAutoAssets();
-        renderNetWorthPanel();
-        document.getElementById('netWorthModal').style.display = 'flex';
-    } else {
-        document.getElementById('netWorthModal').style.display = 'none';
-    }
-}
-
-function closeNetWorth() {
-    appState.showNetWorthPanel = false;
-    document.getElementById('netWorthModal').style.display = 'none';
-}
-
-function calculateAutoAssets() {
-    // חישוב יתרת עו"ש מעסקאות (אוטומטי)
-    const checkingAccountBalance = calculateCheckingAccountBalance();
-    appState.netWorth.assets.checkingAccount = checkingAccountBalance;
-}
-
-function calculateCheckingAccountBalance() {
-    const transactions = appState.extractedTransactions || [];
-    let balance = 0;
-    
-    transactions.forEach(transaction => {
-        if (transaction.accountType === 'עו"ש') {
-            if (isLikelyIncome(transaction)) {
-                balance += transaction.amount;
-            } else {
-                balance -= transaction.amount;
-            }
-        }
-    });
-    
-    return Math.max(0, balance); // לא להציג יתרה שלילית
-}
-
-function renderNetWorthPanel() {
-    const assets = appState.netWorth.assets;
-    const liabilities = appState.netWorth.liabilities;
-    
-    // עדכון שדות נכסים
-    document.getElementById('investmentsAmount').value = assets.investments || 0;
-    document.getElementById('checkingAccountAmount').value = assets.checkingAccount || 0;
-    document.getElementById('pensionFundsAmount').value = assets.pensionFunds || 0;
-    document.getElementById('realEstateAmount').value = assets.realEstate || 0;
-    document.getElementById('otherAssetsAmount').value = assets.other || 0;
-    
-    // עדכון שדות התחייבויות
-    document.getElementById('mortgageAmount').value = liabilities.mortgage || 0;
-    document.getElementById('loansAmount').value = liabilities.loans || 0;
-    document.getElementById('creditCardsAmount').value = liabilities.creditCards || 0;
-    document.getElementById('otherLiabilitiesAmount').value = liabilities.other || 0;
-    
-    updateNetWorthCalculation();
-    renderNetWorthHistory();
-}
-
-function updateNetWorthCalculation() {
-    const assets = {
-        investments: parseFloat(document.getElementById('investmentsAmount').value) || 0,
-        checkingAccount: parseFloat(document.getElementById('checkingAccountAmount').value) || 0,
-        pensionFunds: parseFloat(document.getElementById('pensionFundsAmount').value) || 0,
-        realEstate: parseFloat(document.getElementById('realEstateAmount').value) || 0,
-        other: parseFloat(document.getElementById('otherAssetsAmount').value) || 0
-    };
-    
-    const liabilities = {
-        mortgage: parseFloat(document.getElementById('mortgageAmount').value) || 0,
-        loans: parseFloat(document.getElementById('loansAmount').value) || 0,
-        creditCards: parseFloat(document.getElementById('creditCardsAmount').value) || 0,
-        other: parseFloat(document.getElementById('otherLiabilitiesAmount').value) || 0
-    };
-    
-    const totalAssets = Object.values(assets).reduce((sum, val) => sum + val, 0);
-    const totalLiabilities = Object.values(liabilities).reduce((sum, val) => sum + val, 0);
-    const netWorth = totalAssets - totalLiabilities;
-    
-    // עדכון תצוגה
-    document.getElementById('totalAssets').textContent = `₪${totalAssets.toLocaleString()}`;
-    document.getElementById('totalLiabilities').textContent = `₪${totalLiabilities.toLocaleString()}`;
-    document.getElementById('currentNetWorth').textContent = `₪${netWorth.toLocaleString()}`;
-    document.getElementById('currentNetWorth').className = netWorth >= 0 ? 'text-green-600' : 'text-red-600';
-    
-    // עדכון הנתונים במצב
-    appState.netWorth.assets = assets;
-    appState.netWorth.liabilities = liabilities;
-}
-
-function saveNetWorthSnapshot() {
-    updateNetWorthCalculation();
-    
-    const totalAssets = Object.values(appState.netWorth.assets).reduce((sum, val) => sum + val, 0);
-    const totalLiabilities = Object.values(appState.netWorth.liabilities).reduce((sum, val) => sum + val, 0);
-    const netWorth = totalAssets - totalLiabilities;
-    
-    const snapshot = {
-        date: new Date().toISOString(),
-        assets: {...appState.netWorth.assets},
-        liabilities: {...appState.netWorth.liabilities},
-        totalAssets,
-        totalLiabilities,
-        netWorth
-    };
-    
-    appState.netWorth.history.push(snapshot);
-    appState.netWorth.lastUpdated = new Date().toISOString();
-    
-    // שמירה
-    autoSaveToFirebase();
-    
-    // עדכון תצוגה
-    renderNetWorthHistory();
-    
-    alert('✅ שווי נקי נשמר בהצלחה!');
-}
-
-function renderNetWorthHistory() {
-    const historyContainer = document.getElementById('netWorthHistory');
-    const history = appState.netWorth.history || [];
-    
-    if (history.length === 0) {
-        historyContainer.innerHTML = `
-            <div class="text-center text-slate-500 py-8">
-                <span class="text-4xl">📊</span>
-                <div class="mt-2">אין היסטוריה של שווי נקי</div>
-                <div class="text-sm">לחץ על "עדכן שווי נקי" כדי לשמור נקודת נתונים ראשונה</div>
-            </div>
-        `;
-        return;
-    }
-    
-    // מיון לפי תאריך (החדש ביותר קודם)
-    const sortedHistory = [...history].sort((a, b) => new Date(b.date) - new Date(a.date));
-    
-    historyContainer.innerHTML = `
-        <div class="space-y-4">
-            ${sortedHistory.map((snapshot, index) => {
-                const date = new Date(snapshot.date);
-                const isLatest = index === 0;
-                const previousSnapshot = sortedHistory[index + 1];
-                let changeInfo = '';
-                
-                if (previousSnapshot) {
-                    const change = snapshot.netWorth - previousSnapshot.netWorth;
-                    const changePercent = previousSnapshot.netWorth !== 0 ? 
-                        ((change / Math.abs(previousSnapshot.netWorth)) * 100).toFixed(1) : '0.0';
-                    const changeColor = change >= 0 ? 'text-green-600' : 'text-red-600';
-                    const changeIcon = change >= 0 ? '📈' : '📉';
-                    
-                    changeInfo = `
-                        <div class="text-sm ${changeColor}">
-                            ${changeIcon} ${change >= 0 ? '+' : ''}₪${change.toLocaleString()} (${changePercent}%)
-                        </div>
-                    `;
-                }
-                
-                return `
-                    <div class="bg-white rounded-lg p-4 border ${isLatest ? 'border-blue-200 bg-blue-50' : 'border-slate-200'}">
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <div class="font-semibold text-slate-800">
-                                    ${date.toLocaleDateString('he-IL')}
-                                    ${isLatest ? '<span class="text-blue-600 text-sm">(עדכני)</span>' : ''}
-                                </div>
-                                <div class="text-lg font-bold ${snapshot.netWorth >= 0 ? 'text-green-600' : 'text-red-600'}">
-                                    ₪${snapshot.netWorth.toLocaleString()}
-                                </div>
-                                ${changeInfo}
-                            </div>
-                            <div class="text-right text-sm text-slate-600">
-                                <div>נכסים: ₪${snapshot.totalAssets.toLocaleString()}</div>
-                                <div>התחייבויות: ₪${snapshot.totalLiabilities.toLocaleString()}</div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }).join('')}
-        </div>
-    `;
-}
-
-function updateNetWorthButtonVisibility() {
-    const netWorthButton = document.getElementById('netWorthButton');
-    const hasData = (appState.categorizedData && appState.categorizedData.length > 0) || 
-                   (appState.netWorth.history && appState.netWorth.history.length > 0);
-    
-    if (netWorthButton) {
-        netWorthButton.style.display = hasData ? 'inline-flex' : 'none';
-    }
-}
-
-// ==========================
+// =========================
 // UTILITY FUNCTIONS
-// פונקציות עזר
-// ==========================
+// =========================
 
 function getFilteredTransactions() {
     return appState.categorizedData.filter(transaction => {
@@ -3432,10 +2063,9 @@ function getFilteredTransactions() {
     });
 }
 
-// ==========================
+// =========================
 // SETTINGS FUNCTIONS
-// פונקציות הגדרות
-// ==========================
+// =========================
 
 function toggleSettings() {
     appState.showSettings = !appState.showSettings;
@@ -3492,13 +2122,6 @@ function resetAll() {
         appState.showAllTransactions = false;
         appState.showTransactions = false;
         appState.selectedCategoryDetails = null;
-        appState.loadedFiles = new Set();
-        appState.fileTransactions = new Map();
-        appState.monthlyCashflow = {};
-        appState.monthlyIncomes = {};
-        appState.showCashflowTable = false;
-        appState.netWorth.history = [];
-        appState.showNetWorthPanel = false;
         
         if (appState.chartInstance) {
             appState.chartInstance.destroy();
@@ -3538,10 +2161,9 @@ function exportBusinessMappings() {
     document.body.removeChild(element);
 }
 
-// ==========================
+// =========================
 // UI CONTROL FUNCTIONS
-// פונקציות בקרת ממשק
-// ==========================
+// =========================
 
 function hideFileUpload() {
     document.getElementById('fileUploadArea').style.display = 'none';
@@ -3571,53 +2193,12 @@ function hideAllContainers() {
     });
 }
 
-// מודל closers
-function closeModal(modalId) {
-    const modal = document.getElementById(modalId);
-    if (modal) {
-        modal.style.display = 'none';
-    }
-}
-
-// סגירת מודלים בלחיצה על הרקע
-document.addEventListener('click', function(event) {
-    // רשימת מודלים
-    const modals = [
-        'advancedFileManagement',
-        'monthlyCashflowModal', 
-        'netWorthModal'
-    ];
-    
-    modals.forEach(modalId => {
-        const modal = document.getElementById(modalId);
-        if (modal && event.target === modal) {
-            modal.style.display = 'none';
-            // עדכון state בהתאם
-            if (modalId === 'monthlyCashflowModal') {
-                appState.showCashflowTable = false;
-            } else if (modalId === 'netWorthModal') {
-                appState.showNetWorthPanel = false;
-            }
-        }
-    });
-});
-
-// ==========================
+// =========================
 // INITIALIZATION
-// אתחול המערכת
-// ==========================
+// =========================
 
 document.addEventListener('DOMContentLoaded', async function() {
-    console.log('🚀 DOMContentLoaded: מנתח ההוצאות מתקדם נטען...');
-    
-    // החלפת handleFileUpload הקיימת לגרסה המתקדמת
-    const fileInput = document.getElementById('fileInput');
-    if (fileInput) {
-        fileInput.onchange = handleFileUploadWithDuplicateCheck;
-    }
-    
-    // אתחול אירועי לחיצה נוספים
-    initializeEventListeners();
+    console.log('🚀 DOMContentLoaded: מנתח ההוצאות נטען...');
     
     // Check authentication status
     const isAuthenticated = await checkAuthStatus();
@@ -3630,62 +2211,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         
         // Load user's previous analysis if exists
         await loadUserAnalysis();
-        
-        // עדכון תצוגת כפתורים
-        updateDataManagementButtons();
-        updateCashflowButtonVisibility();
-        updateNetWorthButtonVisibility();
     }
     
-    console.log('🎉 DOMContentLoaded: סיום אתחול מערכת מתקדמת');
+    console.log('🎉 DOMContentLoaded: סיום אתחול מערכת');
 });
-
-function initializeEventListeners() {
-    // תמיכה בגרירה לאזור העלאה
-    const uploadZone = document.querySelector('.upload-zone');
-    if (uploadZone) {
-        uploadZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadZone.classList.add('dragover');
-        });
-        
-        uploadZone.addEventListener('dragleave', () => {
-            uploadZone.classList.remove('dragover');
-        });
-        
-        uploadZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadZone.classList.remove('dragover');
-            
-            const files = Array.from(e.dataTransfer.files);
-            if (files.length > 0) {
-                // סימולציה של event לפונקציה
-                handleFileUploadWithDuplicateCheck({target: {files}});
-            }
-        });
-    }
-    
-    // אירועי מקלדת
-    document.addEventListener('keydown', (e) => {
-        // ESC לסגירת מודלים
-        if (e.key === 'Escape') {
-            if (appState.showCashflowTable) {
-                closeMonthlyCashflow();
-            }
-            if (appState.showNetWorthPanel) {
-                closeNetWorth();
-            }
-            if (document.getElementById('advancedFileManagement').style.display === 'flex') {
-                closeAdvancedFileManagement();
-            }
-        }
-        
-        // Ctrl+S לשמירה (מניעת שמירת הדף)
-        if (e.ctrlKey && e.key === 's') {
-            e.preventDefault();
-            autoSaveToFirebase();
-        }
-    });
-}
-
-console.log('✅ מנתח ההוצאות המתקדם - הקובץ נטען בהצלחה!');
