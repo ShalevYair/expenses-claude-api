@@ -1150,34 +1150,9 @@ function updateDisplay() {
 }
 
 function updateAlerts() {
-    const filteredData = getFilteredTransactions();
-    const unknownTransactions = filteredData.filter(t => t.category === 'אחר' || t.category === 'לא מסווג');
-    
+    // Hide alerts container - user doesn't want to see unclassified transactions warning
     const alertsContainer = document.getElementById('alertsContainer');
-    
-    if (unknownTransactions.length > 0) {
-        alertsContainer.classList.remove('hidden');
-        alertsContainer.innerHTML = `
-            <div class="error-card">
-                <div class="flex items-center gap-6">
-                    <div class="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center shadow-lg">
-                        <span class="text-3xl">⚠️</span>
-                    </div>
-                    <div>
-                        <h3 class="text-xl font-bold text-yellow-800 mb-2">
-                            עסקאות לא מסווגות
-                        </h3>
-                        <p class="text-yellow-700 text-lg">
-                            נמצאו ${unknownTransactions.length} עסקאות שלא זוהו אוטומטית. 
-                            תוכל לסווג אותן ידנית בטבלות למטה.
-                        </p>
-                    </div>
-                </div>
-            </div>
-        `;
-    } else {
-        alertsContainer.classList.add('hidden');
-    }
+    alertsContainer.classList.add('hidden');
 }
 
 function updateResults() {
