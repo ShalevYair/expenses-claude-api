@@ -1671,99 +1671,64 @@ async function handleFileUpload(event) {
     const files = Array.from(event.target.files);
     if (files.length === 0) return;
     
-    console.log(`🚀 מתחיל עיבוד ${files.length} קבצים...`);
-    
     appState.uploadedFiles = files.map(f => f.name);
-    let allTransactions = [];
+    let allData = [];
     let filesProcessed = 0;
     
     for (const file of files) {
         try {
-            console.log(`📁 מעבד קובץ: ${file.name}`);
+            let fileData = [];
             
-            // שלב 1: זיהוי וטעינה
-            const fileType = detectFileType(file);
-            const rawData = await loadFileByType(file, fileType);
-            
-            // שלב 2: איתור טבלאות
-            const tables = scanForTables(rawData);
-            
-            if (tables.length === 0) {
-                console.warn(`⚠️ לא נמצאו טבלאות בקובץ ${file.name}`);
+            if (file.type === 'text/csv' || file.name.endsWith('.csv')) {
+                await new Promise((resolve, reject) => {
+                    Papa.parse(file, {
+                        header: true,
+                        skipEmptyLines: true,
+                        complete: (results) => {
+                            fileData = results.data;
+                            resolve();
+                        },
+                        error: (error) => {
+                            reject(error);
+                        }
+                    });
+                });
+            } else {
+                alert('קובץ ' + file.name + ' לא נתמך - רק קבצי CSV');
                 continue;
             }
             
-            // שלב 3: ניתוח עמודות
-            const tablesWithColumns = tables.map(table => ({
-                ...table,
-                columnMapping: analyzeTableColumns(table)
-            }));
-            
-            // שלב 4: דירוג ובחירה
-            const scoredTables = tablesWithColumns.map(table => ({
-                ...table,
-                score: scoreTable(table, table.columnMapping)
-            }));
-            
-            const bestTable = scoredTables.sort((a, b) => b.score - a.score)[0];
-            
-            if (!bestTable || bestTable.score < CONFIG.MINIMUM_SCORE_THRESHOLD) {
-                console.warn(`⚠️ לא נמצאה טבלה מתאימה בקובץ ${file.name} (ציון: ${bestTable?.score || 0})`);
-                continue;
-            }
-            
-            console.log(`✅ נבחרה טבלה עם ציון ${bestTable.score}`);
-            
-            // שלב 5: חילוץ נתונים
-            let fileTransactions = extractTransactions(bestTable, bestTable.columnMapping);
-            
-            if (fileTransactions.length === 0) {
-                console.warn(`⚠️ לא חולצו עסקאות מקובץ ${file.name}`);
-                continue;
-            }
-            
-            // שלב 6: זיהוי סוג מוסד והתאמות
-            const institutionType = detectInstitutionType(fileTransactions, getTableContext(bestTable));
-            fileTransactions = adjustForInstitutionType(fileTransactions, institutionType);
-            
-            allTransactions = [...allTransactions, ...fileTransactions];
+            allData = [...allData, ...fileData];
             filesProcessed++;
             
-            console.log(`✅ קובץ ${file.name} עובד בהצלחה: ${fileTransactions.length} עסקאות`);
-            
         } catch (error) {
-            console.error(`❌ שגיאה בעיבוד קובץ ${file.name}:`, error);
-            alert(`שגיאה בעיבוד הקובץ ${file.name}: ${error.message}`);
+            alert('שגיאה בעיבוד הקובץ ' + file.name + ': ' + error.message);
+            console.error('שגיאה בעיבוד קובץ:', error);
         }
     }
     
-    if (filesProcessed === 0) {
-        alert('לא הצלחתי לעבד אף קובץ. בדוק את פורמט הקבצים.');
-        return;
+    if (filesProcessed > 0 && allData.length > 0) {
+        // בדיקת כפילויות לפני עיבוד
+        if (checkForDuplicateFile(allData)) {
+            alert("קובץ זה כבר נטען!");
+            return;
+        }
+        
+        appState.rawData = allData;
+        appState.extractedTransactions = [];
+        appState.categorizedData = [];
+        appState.yearlyExpenses = new Set();
+        appState.manualClassifications = {};
+        appState.newBusinessesToSave = {};
+        appState.originalBusinessMappings = {...appState.businessMappings};
+        hideFileUpload();
+        
+        setTimeout(() => {
+            analyzeFileDataOld(allData); // הפונקציה הישנה
+        }, 500);
+    } else {
+        alert('לא נמצאו נתונים תקינים בקבצים');
     }
-    
-    if (allTransactions.length === 0) {
-        alert('לא נמצאו עסקאות תקינות בקבצים.');
-        return;
-    }
-    
-    // עדכון המצב הגלובלי
-    appState.rawData = allTransactions; // שמירת הנתונים החדשים
-    appState.extractedTransactions = allTransactions;
-    appState.categorizedData = [];
-    appState.yearlyExpenses = new Set();
-    appState.manualClassifications = {};
-    appState.newBusinessesToSave = {};
-    appState.originalBusinessMappings = {...appState.businessMappings};
-    
-    hideFileUpload();
-    
-    console.log(`🎉 סיים עיבוד: ${allTransactions.length} עסקאות מ-${filesProcessed} קבצים`);
-    
-    // המשך לסיווג
-    setTimeout(() => {
-        categorizeTransactionsWithSmartSystem(allTransactions);
-    }, 500);
 }
 
 // נשמור על שאר הפונקציות הקיימות של הסיווג והתצוגה...
