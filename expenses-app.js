@@ -2167,12 +2167,12 @@ function exportBusinessMappings() {
 
 function hideFileUpload() {
     document.getElementById('fileUploadArea').style.display = 'none';
-    document.getElementById('actionButtons').classList.remove('hidden');
+    // actionButtons now always visible in header
 }
 
 function showFileUpload() {
     document.getElementById('fileUploadArea').style.display = 'block';
-    document.getElementById('actionButtons').classList.add('hidden');
+    // actionButtons now always visible in header
 }
 
 function hideAllContainers() {
