@@ -117,26 +117,28 @@
                 </div>
             </div>
             
-            <!-- העלאת קבצים -->
-            <div class="mt-8 flex justify-center">
-                <div class="text-center" id="fileUploadArea">
-                    <label class="cursor-pointer" for="fileInput">
-                        <div class="upload-zone">
-                            <div class="text-6xl text-emerald-600 mb-6">📁</div>
-                            <span class="text-2xl font-bold text-emerald-800 block mb-3">טען קבצי CSV</span>
-                            <span class="text-lg text-emerald-700 block">גרור קבצים לכאן או לחץ לבחירה</span>
-                        </div>
-                    </label>
-                    <input
-                        type="file"
-                        id="fileInput"
-                        multiple
-                        accept=".csv"
-                        class="hidden"
-                        onchange="handleFileUpload(event)"
-                    />
-                </div>
-            </div>
+            <!-- כפתורי פעולה -->
+<div class="mt-6 flex justify-center gap-6 hidden" id="actionButtons">
+    <label class="cursor-pointer">
+        <div class="action-button">
+            <span class="text-2xl">📁</span>
+            טען
+        </div>
+        <input
+            type="file"
+            accept=".csv,.txt"
+            class="hidden"
+            onchange="handleFileUpload(event)"
+        />
+    </label>
+    
+    <button onclick="saveCurrentState()" class="cursor-pointer">
+        <div class="action-button">
+            <span class="text-2xl">💾</span>
+            שמור
+        </div>
+    </button>
+</div>
             
             
         </div>
