@@ -995,7 +995,8 @@ function getCategoryClassification(category) {
 
 function getDisplayAmount(transaction) {
     if (appState.yearlyExpenses.has(transaction.id)) {
-        return Math.floor(transaction.amount / 12);
+        const monthsInData = getMonthsCount();
+        return Math.floor((transaction.amount / 12) * monthsInData);
     }
     return transaction.amount;
 }
@@ -1005,6 +1006,53 @@ function getTransactionClassification(transaction) {
         return appState.manualClassifications[transaction.id];
     }
     return transaction.classification || getCategoryClassification(transaction.category);
+}
+
+function getMonthsCount() {
+    if (!appState.categorizedData || appState.categorizedData.length === 0) {
+        return 1; // ברירת מחדל
+    }
+    
+    const monthsSet = new Set();
+    
+    appState.categorizedData.forEach(transaction => {
+        if (transaction.date && transaction.date.trim()) {
+            try {
+                // ניסיון לפרס תאריכים בפורמטים שונים
+                let date;
+                const dateStr = transaction.date.trim();
+                
+                // פורמטים נפוצים: DD/MM/YYYY, DD.MM.YYYY, YYYY-MM-DD
+                if (dateStr.includes('/')) {
+                    const parts = dateStr.split('/');
+                    if (parts.length === 3) {
+                        date = new Date(parts[2], parts[1] - 1, parts[0]);
+                    }
+                } else if (dateStr.includes('.')) {
+                    const parts = dateStr.split('.');
+                    if (parts.length === 3) {
+                        date = new Date(parts[2], parts[1] - 1, parts[0]);
+                    }
+                } else if (dateStr.includes('-')) {
+                    date = new Date(dateStr);
+                } else {
+                    return; // תאריך לא מזוהה
+                }
+                
+                if (date && !isNaN(date.getTime())) {
+                    const monthYear = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                    monthsSet.add(monthYear);
+                }
+            } catch (error) {
+                // התעלם משגיאות פרסור תאריכים
+            }
+        }
+    });
+    
+    const monthsCount = monthsSet.size;
+    console.log(`📅 נמצאו ${monthsCount} חודשים בדוח:`, Array.from(monthsSet));
+    
+    return monthsCount > 0 ? monthsCount : 1;
 }
 
 // פונקציה מעודכנת לסיווג עסקאות עם גיבוי קלוד
