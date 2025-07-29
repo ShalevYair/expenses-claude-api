@@ -2137,6 +2137,65 @@ function exportBusinessMappings() {
 }
 
 // =========================
+// SAVE STATE FUNCTION
+// =========================
+
+async function saveCurrentState() {
+    try {
+        // בדיקה שיש נתונים לשמירה
+        if (!appState.categorizedData || appState.categorizedData.length === 0) {
+            alert('אין נתונים לשמירה. נתח קובץ קודם.');
+            return;
+        }
+
+        console.log('💾 מתחיל שמירת מצב נוכחי...');
+
+        // שמירה בבסיס הנתונים
+        await autoSaveToFirebase();
+        console.log('✅ נשמר בבסיס הנתונים');
+
+        // יצירת נתונים לייצוא
+        const exportData = appState.categorizedData.map(transaction => ({
+            'תאריך': transaction.date,
+            'תיאור': transaction.description,
+            'סכום': getDisplayAmount(transaction),
+            'קטגוריה': transaction.category,
+            'סיווג': getTransactionClassification(transaction),
+            'הוצאה שנתית': appState.yearlyExpenses.has(transaction.id) ? 'כן' : 'לא',
+            'נמחק': appState.deletedTransactions.has(transaction.id) ? 'כן' : 'לא',
+            'מקור סיווג': transaction.source || 'אוטומטי'
+        }));
+
+        // יצירת CSV
+        const csv = Papa.unparse(exportData, {
+            header: true,
+            encoding: 'utf-8'
+        });
+
+        // הורדת הקובץ
+        const BOM = '\uFEFF';
+        const element = document.createElement('a');
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const filename = `מנתח-הוצאות-${timestamp}.csv`;
+        
+        element.setAttribute('href', 'data:text/csv;charset=utf-8,' + encodeURIComponent(BOM + csv));
+        element.setAttribute('download', filename);
+        element.style.display = 'none';
+        
+        document.body.appendChild(element);
+        element.click();
+        document.body.removeChild(element);
+
+        console.log('✅ קובץ הורד בהצלחה:', filename);
+        alert(`✅ הנתונים נשמרו!\n📁 קובץ הורד: ${filename}\n💾 נתונים נשמרו גם בבסיס הנתונים`);
+
+    } catch (error) {
+        console.error('❌ שגיאה בשמירת מצב:', error);
+        alert('❌ שגיאה בשמירה: ' + error.message);
+    }
+}
+
+// =========================
 // UI CONTROL FUNCTIONS
 // =========================
 
