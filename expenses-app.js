@@ -1340,7 +1340,35 @@ function createPieChart(data) {
             animation: {
                 animateScale: true,
                 animateRotate: true,
-                duration: 1000
+                duration: 1000,
+                onComplete: function() {
+                    // הוספת מספרים על הגרף
+                    const chart = this;
+                    const ctx = chart.ctx;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    
+                    chart.data.datasets.forEach(function(dataset, i) {
+                        const meta = chart.getDatasetMeta(i);
+                        meta.data.forEach(function(element, index) {
+                            const data = dataset.data[index];
+                            const amountInThousands = Math.round(data / 1000);
+                            
+                            if (amountInThousands > 0) {
+                                const position = element.getCenterPoint();
+                                
+                                ctx.fillStyle = '#ffffff';
+                                ctx.font = 'bold 24px Arial';
+                                ctx.strokeStyle = '#000000';
+                                ctx.lineWidth = 3;
+                                
+                                // רקע לטקסט
+                                ctx.strokeText(amountInThousands.toString(), position.x, position.y);
+                                ctx.fillText(amountInThousands.toString(), position.x, position.y);
+                            }
+                        });
+                    });
+                }
             }
         }
     });
